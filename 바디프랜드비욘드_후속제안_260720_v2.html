@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>바디프랜드 비욘드 — 첫 2개월 구현 범위 제안 (Draft 2 · 2026.07)</title>
+<style>
+  html{word-break:keep-all;overflow-wrap:break-word}
+  h1,h2,h3{text-wrap:balance}
+  p,li,td,th{text-wrap:pretty}
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --ink:#2B2115; --ink-soft:#4A3C2B; --paper:#FBF7EC; --cream2:#F2EAD6;
+    --gold:#A9832A; --gold-soft:#C7AD6F; --gold-bright:#E9CA80;
+    --dark:#241B10; --dark2:#2E2417; --line:rgba(43,33,21,.16);
+  }
+  body{background:#D9CFB8;font-family:'Pretendard Variable',Pretendard,'Noto Sans KR',-apple-system,'Segoe UI',sans-serif;color:var(--ink);line-height:1.62}
+  .serif{font-family:'Noto Serif KR','Nanum Myeongjo',serif}
+  .slide{width:1280px;height:720px;margin:18px auto;background:var(--paper);position:relative;box-shadow:0 3px 18px rgba(0,0,0,.16);padding:54px 64px 46px;display:flex;flex-direction:column;overflow:hidden}
+  .slide.dark{background:var(--dark);color:#F3EADB}
+  .shead{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.2em;font-weight:700;color:#9A8A72;text-transform:uppercase;margin-bottom:22px}
+  .slide.dark .shead{color:#8F7C5E}
+  .sfoot{position:absolute;bottom:22px;right:64px;font-size:11px;font-weight:800;color:var(--gold)}
+  .secno{font-size:11px;letter-spacing:.22em;font-weight:800;color:var(--gold);margin-bottom:10px;display:flex;align-items:center;gap:10px}
+  .secno::before{content:"";width:26px;height:1px;background:var(--gold)}
+  h1{font-size:31px;font-weight:800;letter-spacing:-.02em;line-height:1.4;margin-bottom:10px}
+  .slide.dark h1{color:#F7EFDD}
+  h1 .g{color:var(--gold)}
+  .slide.dark h1 .g{color:var(--gold-bright)}
+  .lead{font-size:14.5px;color:var(--ink-soft);margin-bottom:18px;max-width:960px}
+  .slide.dark .lead{color:#CBBBA0}
+  p{font-size:13.5px;color:var(--ink-soft)}
+  b{color:var(--ink);font-weight:800}
+  .slide.dark p b{color:#F3EADB}
+  .cols{display:grid;gap:14px;flex:1;align-content:start}
+  .c2{grid-template-columns:1fr 1fr}
+  .c3{grid-template-columns:1fr 1fr 1fr}
+  .card{background:#FFFDF6;border:1px solid var(--line);border-radius:5px;padding:18px 20px}
+  .card.gold{background:#F6EFDC;border-color:rgba(169,131,42,.45)}
+  .card.dark{background:var(--dark2);border-color:rgba(233,202,128,.28)}
+  .card h4{font-size:14.5px;font-weight:800;margin-bottom:7px;color:var(--ink)}
+  .card.dark h4{color:#F7EFDD}
+  .card p{font-size:12.8px}
+  .card.dark p{color:#CBBBA0}
+  .num{display:inline-flex;align-items:center;justify-content:center;min-width:23px;height:23px;border-radius:50%;background:var(--gold);color:#FFFDF6;font-size:12px;font-weight:800;margin-right:8px;vertical-align:-4px}
+  ul{list-style:none}
+  li{position:relative;padding-left:15px;margin:6px 0;font-size:13px;color:var(--ink-soft)}
+  li::before{content:"";position:absolute;left:0;top:10px;width:5px;height:5px;border-radius:50%;background:var(--gold-soft)}
+  .slide.dark li{color:#CBBBA0}
+  table{width:100%;border-collapse:collapse;font-size:12.8px}
+  th{background:#EAE0C6;font-weight:800;text-align:left;padding:9px 12px;border-bottom:1px solid rgba(43,33,21,.25);font-size:11.5px}
+  td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-soft)}
+  .band{background:var(--dark2);color:#F3E9D4;border-left:3px solid var(--gold);padding:13px 20px;border-radius:0 6px 6px 0;font-size:14px;font-weight:700;line-height:1.7;margin-top:auto}
+  .band .g{color:var(--gold-bright)}
+  .slide.dark .band{background:rgba(233,202,128,.08)}
+  .tag{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.04em;padding:2px 10px;border-radius:999px;margin-left:6px;vertical-align:2px}
+  .tag.live{background:#E4EFE6;color:#3E5A4C}
+  .tag.sample{background:#EDE1C8;color:#7A6335}
+  .tag.visual{background:#F4E3DC;color:#8A4A2E}
+  .hr-gold{width:44px;height:2px;background:var(--gold);margin:26px auto}
+  .center{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;flex:1}
+  .cover-title{font-size:56px;font-weight:800;color:#F7EFDD;letter-spacing:.01em;margin:12px 0 6px;font-family:'Noto Serif KR',serif}
+  .cover-sub{font-size:19px;color:var(--gold-bright);font-weight:700;margin-bottom:26px}
+  .cover-quote{font-size:16px;color:#D8C8A8;line-height:1.95;max-width:760px}
+  .cover-quote b{color:#F7EFDD}
+  .kicker{font-size:12px;letter-spacing:.26em;font-weight:800;color:var(--gold-bright);text-transform:uppercase}
+  .tagline{font-size:11.5px;letter-spacing:.14em;color:#B7A280}
+  .flowrow{display:flex;gap:0;align-items:stretch;margin-top:6px}
+  .flowrow .fr{flex:1;background:#F2EAD6;border:1px solid var(--line);padding:13px 16px;position:relative}
+  .flowrow .fr+.fr{border-left:none}
+  .flowrow .fr .w{font-size:10.5px;font-weight:800;letter-spacing:.1em;color:var(--gold);margin-bottom:3px}
+  .flowrow .fr .t{font-size:13px;font-weight:800;color:var(--ink);margin-bottom:3px}
+  .flowrow .fr p{font-size:11.8px}
+  @media print{
+    body{background:#fff}
+    .slide{margin:0;box-shadow:none;page-break-after:always}
+    @page{size:1280px 720px;margin:0}
+  }
+</style>
+</head>
+<body>
+
+<!-- S1 · COVER -->
+<div class="slide dark">
+  <div class="shead"><span>Confidential · 바디프랜드 강웅철 의장님께</span><span>LICHE · 2026.07 · Draft 2</span></div>
+  <div class="center">
+    <div class="kicker">Bodyfriend Beyond · Contract ① — Scope Proposal</div>
+    <div class="cover-title">바디프랜드 비욘드</div>
+    <div class="cover-sub">첫 2개월 — 구현 범위 제안</div>
+    <div class="hr-gold"></div>
+    <div class="cover-quote">
+      전부를 약속하는 문서는 이미 드렸습니다.<br>
+      오늘은 <b>두 달 안에 눈앞에서 동작할 것</b>만 말씀드립니다.
+    </div>
+    <div class="hr-gold"></div>
+    <div class="tagline">제안 리체 · 바디프랜드 전용 프로젝트 · 대외비</div>
+  </div>
+</div>
+
+<!-- S2 · 문서의 위치 -->
+<div class="slide">
+  <div class="shead"><span>01 · 이 문서의 위치</span><span>바디프랜드 비욘드 · Draft 2</span></div>
+  <div class="secno">01 · 이 문서의 위치</div>
+  <h1 class="serif">지난 발표가 전체 지도였다면,<br>오늘은 <span class="g">첫 걸음의 축척</span>입니다.</h1>
+  <p class="lead">비욘드의 세계관·4개 층·등급·코인 3단계는 7월 16일 발표로 갈음합니다. 이 문서는 반복하지 않습니다 — 오늘의 주제는 하나, 계약 ①에서 무엇을 어디까지 구현해 보여드리는가입니다.</p>
+  <div class="cols c3">
+    <div class="card"><h4>지난 발표 (Draft 1)</h4><p>비욘드의 전체 구상 — 멤버십 메타버스의 세계관, 4개 층과 등급의 사다리, 5개월 · 독립 계약 3건.</p></div>
+    <div class="card gold"><h4>오늘 (Draft 2)</h4><p>그중 <b>계약 ① 하나</b> — 2개월의 구현 범위, 수행 방식, 그리고 그 방식이어야 하는 이유.</p></div>
+    <div class="card"><h4>오늘 요청드리는 결정</h4><p><b>계약 ① 승인(1.99억 · 2개월)과 NDA</b> — 둘뿐입니다. 계약 ②·③은 두 달 뒤의 결과 위에서만 논의합니다.</p></div>
+  </div>
+  <div class="band">결정은 가볍게 — <span class="g">두 달, 하나의 계약.</span> 증명은 무겁게 — 동작하는 결과물로.</div>
+  <div class="sfoot">02 / 12</div>
+</div>
+
+<!-- S3 · 2개월의 목표 -->
+<div class="slide">
+  <div class="shead"><span>02 · 2개월의 목표</span><span>바디프랜드 비욘드 · Draft 2</span></div>
+  <div class="secno">02 · 2개월의 목표</div>
+  <h1 class="serif">보고서가 아니라,<br><span class="g">손끝으로 확인하는 비욘드</span>를 만듭니다.</h1>
+  <p class="lead">게임업계는 대작일수록 전체를 만들기 전에 <b>수직 슬라이스(Vertical Slice)</b>를 먼저 만듭니다 — 가장 얇게, 그러나 처음부터 끝까지. 세계 전체가 아니라 심장이 뛰는지를 그것으로 판정합니다. 계약 ①은 비욘드의 수직 슬라이스입니다.</p>
+  <div class="cols c3">
+    <div class="card gold"><h4><span class="num">1</span>동작하는 내 몸 리포트</h4><p>그림이 아니라 화면 — <b>실데이터로 동작하는 시연</b>을 의장님 손 안의 기기에서 직접 확인하십니다.</p></div>
+    <div class="card gold"><h4><span class="num">2</span>숫자로 판정된 검증</h4><p>앱·기기 데이터 실측 — 리포트가 성립하는 범위와 공식 모수를 <b>숫자로 확정</b>합니다.</p></div>
+    <div class="card gold"><h4><span class="num">3</span>다음 문을 여는 설계도</h4><p>혜택 마스터플랜 · KPI 확정안 · 투입 규모 · 역할 분담안 — <b>계약 ②를 판단할 재료 일체</b>.</p></div>
+  </div>
+  <div class="band">두 달 뒤 남는 것은 인상이 아니라 <span class="g">판정의 재료</span>입니다 — 그리고 첫 심장박동입니다.</div>
+  <div class="sfoot">03 / 12</div>
+</div>
+
+<!-- S4 · 구현 범위 한눈에 -->
+<div class="slide">
+  <div class="shead"><span>03 · 구현 범위</span><span>바디프랜드 비욘드 · Draft 2</span></div>
+  <div class="secno">03 · 구현 범위 — 세 개의 트랙</div>
+  <h1 class="serif">두 달, <span class="g">세 트랙</span>이 동시에 달립니다.</h1>
+  <div class="cols" style="grid-template-columns:1fr;gap:12px;margin-top:8px">
+    <div class="card"><h4>Track A · 검증 — 데이터 실측 <span style="font-weight:600;font-size:12px;color:#8F7F68">1~4주차</span></h4>
+    <p>팬텀·파라오 중심 기기·앱 데이터 실측 → 연동 가능 모수·데이터 품질·리포트 성립 범위 판정 → 공식 지표 기준 KPI 분모 확정. <b>모든 가정이 숫자로 바뀌는 트랙</b>입니다.</p></div>
+    <div class="card gold"><h4>Track B · 구현 — 수직 슬라이스 <span style="font-weight:600;font-size:12px;color:#8F7F68">3~8주차</span></h4>
+    <p>내 몸 리포트 + 코인 루프 + 등급 진입의 감각을 <b>하나의 동작하는 흐름</b>으로 — 다음 장에서 화면 단위로 상세히 말씀드립니다.</p></div>
+    <div class="card"><h4>Track C · 설계 — 마스터플랜 <span style="font-weight:600;font-size:12px;color:#8F7F68">5~8주차</span></h4>
+    <p>등급×혜택 매트릭스, 셀렉트 운영 설계(렌탈 결합 결제·로마드 연계 검토 포함), 신규 유입 콘텐츠, KPI 확정안, 마케팅·운영 투입 규모 산출, 이후 단계 역할 분담안.</p></div>
+  </div>
+  <div class="band">검증(A)이 구현(B)의 재료를 대고, 구현이 설계(C)의 근거를 만듭니다 — <span class="g">세 트랙은 서로를 증명합니다.</span></div>
+  <div class="sfoot">04 / 12</div>
+</div>
+
+<!-- S5 · 수직 슬라이스 상세 -->
+<div class="slide">
+  <div class="shead"><span>03 · 구현 범위</span><span>바디프랜드 비욘드 · Draft 2</span></div>
+  <div class="secno">03 · 구현 범위 — 수직 슬라이스의 내용물</div>
+  <h1 class="serif">비욘드의 하루를,<br>처음부터 끝까지 <span class="g">한 번 걷게</span> 만듭니다.</h1>
+  <p class="lead">전 기능이 아니라 하나의 완결된 경험 — 켜고, 확인하고, 몸을 돌보고, 쌓이고, 오르는 하루. 어디까지가 실데이터이고 어디까지가 샘플인지 정직하게 표기합니다.</p>
+  <div class="cols c2" style="gap:10px">
+    <div class="card"><h4>내 몸 리포트 <span class="tag live">동작 · 실데이터</span></h4><p>지난주의 나 — 몸의 변화 그래프, 케어 기록, 내 데이터에서 나온 오늘의 미션과 보상.</p></div>
+    <div class="card"><h4>코인 루프 <span class="tag live">동작 · 실데이터</span></h4><p>케어 기록 → 적립 → 등급 게이지 상승 — "끊으면 아까운" 루프의 최소 완결 단위.</p></div>
+    <div class="card"><h4>등급 진입의 감각 <span class="tag sample">동작 · 샘플 데이터</span></h4><p>게스트 QR 가입 → 꽝 없는 럭키드로우 → 프렌드·라운지 진입 — 사다리의 첫 세 칸을 직접 오르게.</p></div>
+    <div class="card"><h4>가족 공유 <span class="tag sample">동작 · 샘플 데이터</span></h4><p>부모님의 주간 리포트가 자녀에게 도착하는 순간 — 150만이 500만이 되는 통로의 시연.</p></div>
+    <div class="card" style="grid-column:1/3"><h4>웰니스 셀렉트 미리보기 <span class="tag visual">화면 · 콘셉트</span></h4><p>라운지 등급에 열리는 장터의 콘셉트 화면 — 거래 기능은 이번 범위가 아니므로 화면으로만 보여드립니다. 정직한 경계 표기가 판정의 전제입니다.</p></div>
+  </div>
+  <div class="sfoot">05 / 12</div>
+</div>
+
+<!-- S6 · 하지 않는 것 -->
+<div class="slide">
+  <div class="shead"><span>03 · 구현 범위</span><span>바디프랜드 비욘드 · Draft 2</span></div>
+  <div class="secno">03 · 구현 범위 — 하지 않는 것</div>
+  <h1 class="serif">이번에 <span class="g">다 만들지 않습니다.</span><br>다 만들지 않아야, 두 달이 성립합니다.</h1>
+  <p class="lead">범위 밖을 먼저 선언하는 것은 약속의 일부입니다 — 아래 네 가지는 계약 ①에 없습니다.</p>
+  <div class="cols c2">
+    <div class="card"><h4>기존 앱의 리뉴얼·운영</h4><p>내부팀의 영역이며 이미 성과를 내고 있습니다. 리체는 그 위에 얹는 <b>새로운 층</b>만 만듭니다 — 중복 투자도, 영역 충돌도 없습니다.</p></div>
+    <div class="card"><h4>코인 2·3단계 (크레딧 경제·시장 개방)</h4><p>앞단이 성립하기 전의 뒷단 설계는 의미가 없습니다. 5개월 판정 뒤, 별도 승인 대상입니다.</p></div>
+    <div class="card"><h4>소사이어티 거래 보증 구조</h4><p>인증·보증·평판·퇴출의 책임 구조는 무거운 결정입니다 — 검증된 숫자 위에서 따로 승인받겠습니다.</p></div>
+    <div class="card"><h4>전면 개발 · 전 고객 오픈</h4><p>수직 슬라이스와 베타 설계까지가 이번 범위입니다. 확산은 판정을 통과한 다음의 일입니다.</p></div>
+  </div>
+  <div class="band">범위를 좁힌 대가로 얻는 것 — <span class="g">속도, 1.99억이라는 숫자, 그리고 명쾌한 판정.</span></div>
+  <div class="sfoot">06 / 12</div>
+</div>
+
+<!-- S7 · 왜 단독 ① -->
+<div class="slide">
+  <div class="shead"><span>04 · 수행 방식</span><span>바디프랜드 비욘드 · Draft 2</span></div>
+  <div class="secno">04 · 왜 이번 두 달은 리체 단독인가 — 첫째</div>
+  <h1 class="serif">검증은 합의의 산물이 아니라<br><span class="g">판정의 재료</span>여야 합니다.</h1>
+  <div class="cols" style="grid-template-columns:1fr;gap:12px;margin-top:6px">
+    <div class="card gold"><h4>목표가 오염되지 않아야 합니다</h4>
+    <p>실행 주체가 섞이면 목표는 회의마다 조율의 대상이 됩니다 — 조금씩 깎이고 섞여, 두 달 뒤에는 <b>무엇을 판정하는지가 흐려집니다</b>. 의장님의 구상은 원형 그대로 구현되어야 하고, 판정도 그 원형에 대해 내려져야 합니다.</p></div>
+    <div class="card gold"><h4>책임이 하나여야 합니다</h4>
+    <p>전담이므로 결과가 부족하면 <b>변명의 여지 없이 리체의 책임</b>입니다. 실패의 원인을 나누는 구조에서는 판정 자체가 불가능해집니다 — 저희는 판정받는 쪽을 택했습니다.</p></div>
+    <div class="card gold"><h4>오너의 구상은 바깥에서 만들어야 합니다</h4>
+    <p>내부 조직에게 오너 프로젝트는 부담이 큰 숙제입니다. 외부가 맡아야 조직이 편하게 판단하고, 냉정하게 평가할 수 있습니다 — <b>평가의 자유가 이 프로젝트의 품질 관리 장치</b>입니다.</p></div>
+  </div>
+  <div class="sfoot">07 / 12</div>
+</div>
+
+<!-- S8 · 왜 단독 ② -->
+<div class="slide">
+  <div class="shead"><span>04 · 수행 방식</span><span>바디프랜드 비욘드 · Draft 2</span></div>
+  <div class="secno">04 · 왜 이번 두 달은 리체 단독인가 — 둘째</div>
+  <h1 class="serif">처음부터 <span class="g">AI가 만들고, AI가 고치는 코드</span>로<br>태어나야 합니다.</h1>
+  <p class="lead">리체는 이번 구현을 100% AI 네이티브로 개발합니다 — 이것은 개발 속도의 문제이자, 그 이후 5년의 운영비 구조의 문제입니다.</p>
+  <div class="cols c3">
+    <div class="card"><h4>속도</h4><p>소수 정예 × AI 개발 — <b>2개월·1.99억이 성립하는 이유</b>입니다. 통상 이 규모 구축의 10% 수준 비용은 이 방식이 아니면 나올 수 없는 숫자입니다.</p></div>
+    <div class="card"><h4>유지보수의 경제</h4><p>계절·캠페인마다 콘텐츠와 화면을 개발자 손 거의 없이 갱신합니다 — <b>업데이트가 빠르고 싼 구조</b>가 살아있는 멤버십의 전제입니다.</p></div>
+    <div class="card"><h4>단일 설계</h4><p>AI 유지보수 효율은 <b>하나의 일관된 코드베이스</b>에서 극대화됩니다. 검증 단계에서 이질적 코드가 섞이면 이 이점은 시작부터 사라집니다.</p></div>
+  </div>
+  <div class="band">기존 앱·시스템과의 결합은 버리는 것이 아닙니다 — <span class="g">검증 결과 위에서, 역할 분담안과 함께</span> 설계해 제출합니다.</div>
+  <div class="sfoot">08 / 12</div>
+</div>
+
+<!-- S9 · 2개월 뒤의 결정 -->
+<div class="slide">
+  <div class="shead"><span>05 · 두 달 뒤</span><span>바디프랜드 비욘드 · Draft 2</span></div>
+  <div class="secno">05 · 두 달 뒤의 결정</div>
+  <h1 class="serif">이후의 개발 방식은,<br><span class="g">결과를 보고 함께</span> 정합니다.</h1>
+  <p class="lead">단독 수행은 두 달짜리 약속입니다 — 그 다음은 열려 있습니다. 판정의 재료(슬라이스 완성도·검증 데이터·KPI·역할 분담안)를 책상에 놓고, 세 갈래에서 함께 선택하시죠.</p>
+  <div class="cols c3">
+    <div class="card"><h4>하이브리드 개발</h4><p>바디프랜드 내부팀과 리체가 <b>역할 분담안에 따라 함께</b> — 어디를 누가 맡는 것이 가장 빠르고 경제적인지, 데이터가 답한 대로.</p></div>
+    <div class="card"><h4>리체 전담 지속</h4><p>속도와 단일 설계의 이점이 크다고 판정되면 — 전담 구조를 다음 단계로 연장합니다.</p></div>
+    <div class="card"><h4>중단</h4><p>숫자가 기준에 미달하면 — <b>다음은 없습니다.</b> 실패의 위험을 바디프랜드 혼자 지지 않는 구조입니다.</p></div>
+  </div>
+  <div class="band">저희는 결과에 따르겠습니다 — 다만 <span class="g">판정의 재료만은 오염 없이</span> 만들어 오겠습니다.</div>
+  <div class="sfoot">09 / 12</div>
+</div>
+
+<!-- S10 · 일정·진행 체계 -->
+<div class="slide">
+  <div class="shead"><span>06 · 일정과 진행</span><span>바디프랜드 비욘드 · Draft 2</span></div>
+  <div class="secno">06 · 8주 마일스톤 · 진행 체계</div>
+  <h1 class="serif">매주 서면으로 보고하고,<br>격주로 <span class="g">동작하는 것</span>을 보여드립니다.</h1>
+  <div class="flowrow">
+    <div class="fr"><div class="w">1~2주차</div><div class="t">데이터 실측 착수</div><p>접근 권한 · 검증 설계 · 팬텀·파라오 실측 시작</p></div>
+    <div class="fr"><div class="w">3~4주차</div><div class="t">검증 리포트</div><p>유의미 모수 확정 · 리포트 성립 범위 판정 · 중간 보고</p></div>
+    <div class="fr"><div class="w">5~6주차</div><div class="t">슬라이스 α</div><p>내 몸 리포트 · 코인 루프 동작 버전 · 격주 시연</p></div>
+    <div class="fr"><div class="w">7~8주차</div><div class="t">최종 납품 · 시연</div><p>수직 슬라이스 완성 · 마스터플랜 6종 일괄 납품</p></div>
+  </div>
+  <div class="cols c3" style="margin-top:14px">
+    <div class="card"><h4>바디프랜드 인력 투입 0명</h4><p>필요한 것은 데이터 접근 권한과 주 1회 창구 협의뿐 — 본업에 부담을 드리지 않습니다.</p></div>
+    <div class="card"><h4>전자계약 · 서면 보고</h4><p>전자계약으로 당일 체결, 매주 서면 보고, 격주 브리핑(대면·화상) — 진행이 멈추지 않는 체계.</p></div>
+    <div class="card"><h4>KPI는 공식 지표로</h4><p>목표의 분모는 앱 공식 지표 확인 즉시 확정 기입 — 상향하되, 책임질 수 있는 숫자만 약속합니다.</p></div>
+  </div>
+  <div class="band">7월 착수 → 9월 판정 → 연내 베타 — <span class="g">연내 베타의 마지막 착수 시점이 7월입니다.</span></div>
+  <div class="sfoot">10 / 12</div>
+</div>
+
+<!-- S11 · 조건과 결정 -->
+<div class="slide">
+  <div class="shead"><span>07 · 요청드리는 결정</span><span>바디프랜드 비욘드 · Draft 2</span></div>
+  <div class="secno">07 · 요청드리는 결정</div>
+  <h1 class="serif">필요한 결정은 두 가지 —<br>모두 <span class="g">오늘 가능한</span> 결정입니다.</h1>
+  <div class="cols c2" style="margin-top:8px">
+    <div class="card gold"><h4><span class="num">1</span>계약 ① 승인 — 1.99억 원 · 2개월</h4>
+    <p>착수금 50%(체결 시) · 잔금 50%(납품 검수 시). 전자계약으로 당일 체결이 가능합니다. 두 달 뒤 — 동작하는 수직 슬라이스와 검증·설계 납품물 일체가 책상에 놓입니다.</p></div>
+    <div class="card gold"><h4><span class="num">2</span>NDA 체결 — 빠른 시작을 위해</h4>
+    <p>데이터 제공 범위·고객 동의 체계를 담은 비밀유지계약. 리체의 전용성 약정을 함께 담습니다 — 본 프로젝트의 결과물과 노하우는 바디프랜드 외 어떤 회사에도 제공하지 않습니다.</p></div>
+  </div>
+  <table style="margin-top:14px">
+    <tr><th style="width:24%">오늘 승인 범위</th><td>계약 ① + NDA — 계약 ②·③, 코인 뒷단, 소사이어티 보증은 결과 위에서 별도 승인</td></tr>
+    <tr><th>데이터 활용</th><td>고객 동의와 관련 법령의 범위 안에서 설계 — 고객 동의 체계 설계가 계약 ①의 첫 과업</td></tr>
+  </table>
+  <div class="sfoot">11 / 12</div>
+</div>
+
+<!-- S12 · CLOSING -->
+<div class="slide dark">
+  <div class="shead"><span>Closing</span><span>LICHE · 2026.07 · Draft 2</span></div>
+  <div class="center">
+    <div class="hr-gold"></div>
+    <div class="cover-quote">
+      비욘드의 세계 전체는 아직 지도 위에 있습니다.<br><br>
+      그러나 두 달 뒤 —<br>
+      <b style="color:var(--gold-bright)">그 세계의 첫 심장박동</b>을 직접 확인하시게 될 겁니다.<br><br>
+      그 두 달을, 오늘 시작하게 해주십시오.
+    </div>
+    <div class="hr-gold"></div>
+    <div class="tagline">LICHE · 바디프랜드 멤버십 메타버스 · 바디프랜드 전용 프로젝트 · 대외비</div>
+  </div>
+  <div class="sfoot">12 / 12</div>
+</div>
+
+</body>
+</html>
