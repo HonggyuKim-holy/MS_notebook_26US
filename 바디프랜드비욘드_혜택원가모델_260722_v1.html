@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>혜택 원가 모델 v1 — 바디프랜드 비욘드 (계약① 납품물 초안 · 내부용)</title>
+<style>
+  html{word-break:keep-all;overflow-wrap:break-word}
+  h1,h2,h3{text-wrap:balance}
+  p,li,td,th{text-wrap:pretty}
+  *{box-sizing:border-box}
+  body{margin:0;background:#F3EADB;color:#291F15;font-family:'Pretendard Variable',Pretendard,'Noto Sans KR',-apple-system,'Segoe UI',sans-serif;line-height:1.7}
+  .wrap{max-width:960px;margin:0 auto;padding:52px 28px 90px}
+  .kicker{font-size:12px;letter-spacing:.22em;font-weight:800;color:#A9832A;text-transform:uppercase;margin-bottom:10px}
+  h1{font-size:25px;font-weight:800;letter-spacing:-.02em;margin:0 0 6px;line-height:1.4}
+  .sub{font-size:13.5px;color:#8A7C6A;margin:0 0 24px}
+  .intro{background:#221A12;color:#F8F0DF;border-left:3px solid #A9832A;padding:16px 22px;border-radius:0 8px 8px 0;font-size:14px;font-weight:600;line-height:1.85;margin-bottom:28px}
+  .intro .g{color:#E9CA80;font-weight:800}
+  h2{font-size:17px;font-weight:800;margin:30px 0 10px;color:#291F15;padding-bottom:6px;border-bottom:2px solid #E4D8BC}
+  h2 .n{color:#A9832A;margin-right:8px}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0}
+  th{background:#EAE0C6;font-weight:800;text-align:left;padding:8px 10px;font-size:11.5px;border-bottom:1px solid rgba(43,33,21,.25)}
+  td{padding:8px 10px;border-bottom:1px solid rgba(41,31,21,.12);vertical-align:top;color:#3B2F20}
+  b{color:#291F15}
+  .conf{display:inline-block;font-size:10px;font-weight:800;padding:1px 8px;border-radius:999px;white-space:nowrap}
+  .ok{background:#E4EFE6;color:#3E5A4C}
+  .asm{background:#EDE1C8;color:#7A6335}
+  .wait{background:#F4E3DC;color:#8A4A2E}
+  .formula{background:#FFFDF8;border:1px solid rgba(41,31,21,.14);border-left:3px solid #A9832A;border-radius:0 6px 6px 0;padding:14px 20px;font-size:14px;margin:10px 0;font-weight:700}
+  .formula .f{font-family:'Noto Serif KR',serif;font-size:15px;color:#291F15}
+  ul{margin:6px 0;padding-left:0;list-style:none}
+  li{position:relative;padding-left:16px;margin:6px 0;font-size:13.5px;color:#3B2F20}
+  li::before{content:"";position:absolute;left:0;top:9px;width:5px;height:5px;border-radius:50%;background:#C7AD6F}
+  .small{font-size:12px;color:#8A7C6A}
+  .footer{text-align:center;font-size:12px;color:#8A7C6A;margin-top:36px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="kicker">Liche · 내부 작업 문서 · 대외비 — 계약① 납품물 「혜택 원가 모델·리워드 예산안」의 초안</div>
+  <h1>혜택 원가 모델 v1</h1>
+  <p class="sub">제안서 「혜택의 값」(가구당 월 5천~1만 원 · 씨앗 연 2~5억 · 확산 연 40~85억 · 매출 대비 1~2%)의 산정 근거 · 2026-07-22 · 이후 실측 데이터 수령 시마다 버전업</p>
+
+  <div class="intro">
+    이 문서의 규칙 — 모든 숫자는 <span class="g">출처 있는 근거</span>와 <span class="g">우리가 세운 가정</span>을 구분해 표기한다.<br>
+    가정은 계약 ①의 실측으로 하나씩 확정치로 바뀌며, 그 과정 자체가 납품물이 된다.
+  </div>
+
+  <h2><span class="n">1</span>산식 (모델 구조)</h2>
+  <div class="formula">
+    <span class="f">① 현금성 리워드 비용 = 대상 가구 × 활성률 × 가구당 월 리워드 상당액 × 12 × (1 − 미상환률)</span><br>
+    <span class="f">② 일회성 비용 = 웰컴 코인(가구당) × 신규 진입 가구 + 이벤트 예산(럭키드로우·733 디너 등)</span><br>
+    <span class="f">③ 비현금 항목 = 셀렉트 노마진(마진 포기 — 현금 지출 아님) + 등급 우대 + 가족 계정(한계비용 ≈ 0)</span><br>
+    <span class="f">총 혜택 비용 = ① + ② (③은 별도 표기 — 현금 유출이 아니므로 합산하지 않음)</span>
+  </div>
+
+  <h2><span class="n">2</span>변수표 — 가정치·출처·확정 방법</h2>
+  <table>
+    <tr><th>변수</th><th>현재 값</th><th>성격</th><th>근거 / 확정 방법·시점</th></tr>
+    <tr><td>가구당 월 리워드 상당액</td><td>5,000~10,000원</td><td><span class="conf asm">설계 가정</span></td><td>글로벌 적립 1~5%·한국 눈높이(네이버 5%·컬리 3~7%) 밴드 안에서 프리미엄 소액 설계 → 계약① 혜택 마스터플랜에서 혜택별 단가로 분해 확정</td></tr>
+    <tr><td>활성률</td><td>60%</td><td><span class="conf asm">가정</span></td><td>씨앗은 신규 구매+로그인 필수 기기라 높게 가정 → 파일럿 실측(로그인·케어 지표)으로 확정</td></tr>
+    <tr><td>미상환률(breakage)</td><td>30%</td><td><span class="conf asm">가정(벤치마크 중앙)</span></td><td>글로벌 20~40% <span class="conf ok">출처 확보</span> → 코인 사용 실측으로 확정</td></tr>
+    <tr><td>씨앗 가구 수</td><td>3,000</td><td><span class="conf wait">확인 대기</span></td><td>9월 AI 프로 판매 목표 — 이근호 소장 회신 대기(질문 ①) → 공식 수치로 교체</td></tr>
+    <tr><td>웰컴 코인</td><td>30,000~50,000원/가구</td><td><span class="conf asm">가정</span></td><td>구매가(900만~1,800만)의 1% 미만 보수 설계</td></tr>
+    <tr><td>이벤트 예산</td><td>연 0.5억~1.5억</td><td><span class="conf asm">가정</span></td><td>럭키드로우 경품 + 733 디너 1~2회 → 마스터플랜에서 이벤트 캘린더로 확정</td></tr>
+    <tr><td>확산 활성 가구</td><td>100,000</td><td><span class="conf asm">목표(의장 목표 수용)</span></td><td>확산 단계 목표 — 씨앗 실측 공식(전환율·리텐션·가구당 비용)으로 도달 계획 산출</td></tr>
+    <tr><td>바디프랜드 매출(분모)</td><td>약 4,200억</td><td><span class="conf ok">공개 자료</span></td><td>2025년 연결 매출 보도 기준 — "매출 대비 %" 계산의 분모</td></tr>
+  </table>
+
+  <h2><span class="n">3</span>시나리오 계산 (현재 가정 기준)</h2>
+  <table>
+    <tr><th>시나리오</th><th>계산</th><th>결과</th></tr>
+    <tr><td><b>씨앗 (3,000가구)</b><br>현금성</td><td>3,000 × 60% × (5천~1만) × 12 × 0.7</td><td><b>연 0.8억~1.5억</b></td></tr>
+    <tr><td>씨앗 일회성</td><td>웰컴 (3~5만)×3,000 + 이벤트 0.5~1.5억</td><td><b>1.4억~3.0억</b></td></tr>
+    <tr><td><b>씨앗 합계</b></td><td>①+②</td><td><b>연 2.2억~4.5억 → 제안서 표기 "연 2~5억"</b></td></tr>
+    <tr><td><b>확산 (활성 10만)</b><br>현금성</td><td>100,000 × (5천~1만) × 12 × 0.7 <span class="small">(활성 기준이므로 활성률 미적용)</span></td><td><b>연 42억~84억</b></td></tr>
+    <tr><td>확산 합계</td><td>+ 이벤트·웰컴 스케일분</td><td><b>연 40~85억 (반올림 표기) = 매출(4,200억) 대비 약 1~2%</b></td></tr>
+  </table>
+  <p class="small">※ 제안서의 레인지는 위 계산의 반올림. 셀렉트 노마진은 현금 유출이 아니므로 합산 제외(마진 포기분·소싱 운영비는 마스터플랜에서 별도 산정).</p>
+
+  <h2><span class="n">4</span>벤치마크 근거 (출처 확보분)</h2>
+  <ul>
+    <li>로열티 프로그램 전체 비용 = 매출의 1~5%, 리워드 자체 = 1~3% <span class="conf ok">글로벌 벤치마크</span></li>
+    <li>적립률(구매액 대비): 대중 1~2%, 프리미엄 3~5% / 한국: 네이버플러스 최대 5%, 컬리 3~7% <span class="conf ok">공개 자료</span></li>
+    <li>미상환(breakage) 20~40% → 실비는 표면가의 60~80% <span class="conf ok">글로벌 벤치마크</span></li>
+    <li>회원 소비: 비회원 대비 +10~25%(성숙 프로그램) · 아마존 프라임 2.3배 · 코스트코 회비=영업이익의 절반, 갱신율 90% <span class="conf ok">공개 자료</span></li>
+    <li>TV홈쇼핑 실질 판매수수료율 27.7% (공정위, 2024 거래 기준) <span class="conf ok">공식 통계</span></li>
+    <li>광고·홈쇼핑 지출 연 700~800억 <span class="conf asm">발표 자리 공유 수치 — 공개 검증 불가, 인용 형태 유지</span></li>
+    <li>상세 출처 링크: 내부 리서치 메모(바디프랜드비욘드_혜택비용_리서치메모_260721.html) 참조</li>
+  </ul>
+
+  <h2><span class="n">5</span>미확정 대기열 (실측·회신으로 채울 것)</h2>
+  <table>
+    <tr><th>항목</th><th>출처</th><th>반영처</th></tr>
+    <tr><td>9월 AI 프로 판매 목표 물량</td><td>이근호 소장 회신 ①</td><td>씨앗 가구 수 확정</td></tr>
+    <tr><td>데이터 연동 가능 기종 구매 고객 수</td><td>소장 회신 ②</td><td>확산 1차 대상 모수</td></tr>
+    <tr><td>앱 가입·활성 정확 수치</td><td>소장 회신 ④</td><td>KPI 분모</td></tr>
+    <tr><td>마사지맵 로그인 강제 수준</td><td>소장 회신 ⑥</td><td>활성률 가정 보정</td></tr>
+    <tr><td>홈쇼핑·광고 채널별 집행액</td><td>소장 회신 ⑨</td><td>수수료 병치 정밀화</td></tr>
+    <tr><td>코인 사용·케어 리텐션 실측</td><td>계약① 파일럿</td><td>미상환률·활성률 확정</td></tr>
+  </table>
+
+  <p class="footer">Liche · 바디프랜드 비욘드 · 혜택 원가 모델 v1 · 내부용 대외비 · 실측 반영 시 버전업</p>
+
+</div>
+</body>
+</html>
