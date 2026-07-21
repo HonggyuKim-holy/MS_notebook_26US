@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>바디프랜드 비욘드 — 첫 2개월 구현 범위 제안 (2026.07 · v21)</title>
+<style>
+  html{word-break:keep-all;overflow-wrap:break-word}
+  h1,h2,h3{text-wrap:balance}
+  p,li,td,th{text-wrap:pretty}
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --ink:#2B2115; --ink-soft:#4A3C2B; --paper:#FBF7EC; --cream2:#F2EAD6;
+    --gold:#A9832A; --gold-soft:#C7AD6F; --gold-bright:#E9CA80;
+    --dark:#241B10; --dark2:#2E2417; --line:rgba(43,33,21,.16);
+    --gA:#6E7F6A; --gB:#A9832A; --gC:#9A6244;
+  }
+  body{background:#D9CFB8;font-family:'Pretendard Variable',Pretendard,'Noto Sans KR',-apple-system,'Segoe UI',sans-serif;color:var(--ink);line-height:1.62}
+  .serif{font-family:'Noto Serif KR','Nanum Myeongjo',serif}
+  .slide{width:1280px;height:720px;margin:18px auto;background:var(--paper);position:relative;box-shadow:0 3px 18px rgba(0,0,0,.16);padding:54px 64px 46px;display:flex;flex-direction:column;overflow:hidden}
+  .slide.dark{background:var(--dark);color:#F3EADB}
+  .slide.dark::before{content:"";position:absolute;inset:16px;border:1px solid rgba(233,202,128,.32);pointer-events:none}
+  .slide.dark::after{content:"";position:absolute;inset:22px;border:1px solid rgba(233,202,128,.11);pointer-events:none}
+  .shead{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.2em;font-weight:700;color:#9A8A72;text-transform:uppercase;margin-bottom:22px}
+  .slide.dark .shead{color:#8F7C5E}
+  .sfoot{position:absolute;bottom:22px;right:64px;font-size:11px;font-weight:800;color:var(--gold)}
+  .secno{font-size:11px;letter-spacing:.22em;font-weight:800;color:var(--gold);margin-bottom:10px;display:flex;align-items:center;gap:10px}
+  .secno::before{content:"";width:26px;height:1px;background:var(--gold)}
+  h1{font-size:31px;font-weight:800;letter-spacing:-.02em;line-height:1.4;margin-bottom:10px}
+  .slide.dark h1{color:#F7EFDD}
+  h1 .g{color:var(--gold)}
+  .slide.dark h1 .g{color:var(--gold-bright)}
+  .lead{font-size:15.5px;color:var(--ink-soft);margin-bottom:18px;max-width:1010px}
+  .slide.dark .lead{color:#CBBBA0}
+  p{font-size:14.5px;color:var(--ink-soft)}
+  b{color:var(--ink);font-weight:800}
+  .slide.dark p b{color:#F3EADB}
+  .cols{display:grid;gap:14px;flex:1;align-content:start}
+  .c2{grid-template-columns:1fr 1fr}
+  .c3{grid-template-columns:1fr 1fr 1fr}
+  .card{background:#FFFDF6;border:1px solid var(--line);border-radius:5px;padding:18px 20px}
+  .card.gold{background:#F6EFDC;border-color:rgba(169,131,42,.45)}
+  .card.dark2{background:var(--dark2);border:1px solid rgba(233,202,128,.3);color:#F3EADB}
+  .card.dark2 h4{color:#F7EFDD}
+  .card.dark2 p,.card.dark2 li{color:#CBBBA0}
+  .card.dark2 b{color:var(--gold-bright)}
+  .card.dark2 li::before{background:rgba(233,202,128,.55)}
+  .card h4{font-size:15.5px;font-weight:800;margin-bottom:7px;color:var(--ink)}
+  .card p{font-size:13.8px}
+  .num{display:inline-flex;align-items:center;justify-content:center;min-width:23px;height:23px;border-radius:50%;background:var(--gold);color:#FFFDF6;font-size:12px;font-weight:800;margin-right:8px;vertical-align:-4px}
+  ul{list-style:none}
+  li{position:relative;padding-left:15px;margin:6px 0;font-size:13.6px;color:var(--ink-soft)}
+  li::before{content:"";position:absolute;left:0;top:9px;width:5px;height:5px;border-radius:50%;background:var(--gold-soft)}
+  table{width:100%;border-collapse:collapse;font-size:13.8px}
+  th{background:#EAE0C6;font-weight:800;text-align:left;padding:9px 12px;border-bottom:1px solid rgba(43,33,21,.25);font-size:11.5px}
+  td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-soft)}
+  .band{background:var(--dark2);color:#F3E9D4;border-left:3px solid var(--gold);padding:13px 20px;border-radius:0 6px 6px 0;font-size:15px;font-weight:700;line-height:1.7;margin-top:auto}
+  .band .g{color:var(--gold-bright)}
+  .slide.dark .band{background:rgba(233,202,128,.08)}
+  .tag{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.04em;padding:2px 10px;border-radius:999px;margin-left:6px;vertical-align:2px}
+  .tag.live{background:#E4EFE6;color:#3E5A4C}
+  .tag.sample{background:#EDE1C8;color:#7A6335}
+  .tag.visual{background:#F4E3DC;color:#8A4A2E}
+  .hr-gold{width:44px;height:2px;background:var(--gold);margin:26px auto}
+  .center{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;flex:1}
+  .cover-title{font-size:56px;font-weight:800;color:#F7EFDD;letter-spacing:.01em;margin:12px 0 6px;font-family:'Noto Serif KR',serif}
+  .cover-sub{font-size:19px;color:var(--gold-bright);font-weight:700;margin-bottom:26px}
+  .cover-quote{font-size:16px;color:#D8C8A8;line-height:1.95;max-width:840px}
+  .cover-quote b{color:#F7EFDD}
+  .kicker{font-size:12px;letter-spacing:.26em;font-weight:800;color:var(--gold-bright);text-transform:uppercase}
+  .tagline{font-size:11.5px;letter-spacing:.14em;color:#B7A280}
+  .footnote{font-size:11.5px;color:#9A8A72;margin-top:8px}
+  .docstrip{margin-top:auto;padding-top:12px;border-top:1px solid var(--line);font-size:11.5px;color:#9A8A72;letter-spacing:.02em}
+  /* Gantt */
+  .gantt{margin-top:8px}
+  .ghead,.grow{display:grid;grid-template-columns:150px 1fr;gap:14px;align-items:center}
+  .ghead{margin-bottom:8px}
+  .grow{margin-bottom:9px}
+  .wkhead{display:grid;grid-template-columns:repeat(8,1fr);gap:5px}
+  .wkhead span{text-align:center;font-size:10.5px;font-weight:800;color:#9A8A72}
+  .glabel{font-size:13px;font-weight:800;color:var(--ink)}
+  .glane{display:grid;grid-template-columns:repeat(8,1fr);gap:5px}
+  .glane .cell{height:32px;background:#ECE3CE;border-radius:4px;grid-row:1}
+  .glane .bar{grid-row:1;border-radius:4px;display:flex;align-items:center;padding:0 12px;color:#FFFDF6;font-size:11.8px;font-weight:800;box-shadow:inset 0 -2px 0 rgba(0,0,0,.14)}
+  .bar.a{background:var(--gA)} .bar.b{background:var(--gB)} .bar.c{background:var(--gC)}
+  /* Weekly cadence */
+  .wkline{display:grid;grid-template-columns:repeat(8,1fr);gap:7px;margin-top:40px;margin-bottom:6px}
+  .wkbox{position:relative;height:46px;background:#ECE3CE;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#9A8A72}
+  .wkbox.rep{background:#F4ECD6;box-shadow:inset 0 0 0 1.6px var(--gold-soft)}
+  .wkbox.hot{background:#F6EFDC;box-shadow:inset 0 0 0 2px var(--gold)}
+  .wkbox .rp{position:absolute;bottom:-19px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10px;font-weight:800;color:var(--gold);letter-spacing:.02em}
+  .wkbox .chip{position:absolute;top:-31px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:11px;font-weight:800;padding:4px 11px;border-radius:999px;background:var(--dark2);color:#F3E9D4}
+  .wkbox .chip::after{content:"";position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--dark2);border-bottom:0}
+  .wkbox .chip.hot{background:var(--gold);color:#FFFDF6}
+  .wkbox .chip.hot::after{border-top-color:var(--gold)}
+  /* flow arrows */
+  .flow3{display:grid;grid-template-columns:1fr 34px 1fr 34px 1fr;gap:0;align-items:stretch}
+  .flow3 .arrow{display:flex;align-items:center;justify-content:center;color:var(--gold);font-size:20px;font-weight:800}
+  .price-line{display:flex;align-items:baseline;gap:12px;margin:6px 0 4px;flex-wrap:nowrap}
+  .price-line .big{font-size:25px;font-weight:800;color:var(--ink);font-family:'Noto Serif KR',serif;white-space:nowrap}
+  .price-line .ctx{font-size:12.3px;color:#8F7F68;font-weight:700;flex:1;min-width:0}
+  .facts li{font-size:13.2px}
+  /* Phone mockups */
+  .phones{display:flex;gap:16px;justify-content:center;margin-top:6px}
+  .phwrap{display:flex;flex-direction:column;align-items:center;width:212px}
+  .ph{width:100%;background:#241B10;border-radius:24px;padding:15px 8px 13px;box-shadow:0 14px 28px rgba(36,27,16,.24),0 3px 8px rgba(36,27,16,.16);position:relative;border:1px solid rgba(233,202,128,.14)}
+  .scr{background:linear-gradient(180deg,#FDFAF2,#FAF5E8);border-radius:16px;height:296px;padding:13px 12px;position:relative;overflow:hidden;display:flex;flex-direction:column;gap:8px}
+  .scr .top{display:flex;justify-content:space-between;align-items:center}
+  .scr .logo{font-size:8.5px;font-weight:800;letter-spacing:.12em;color:#A9832A}
+  .scr .coin{font-size:9px;font-weight:800;color:#7A6335;background:#F2E7CC;border-radius:999px;padding:2px 8px}
+  .scr .htxt{font-size:12.5px;font-weight:800;color:#2B2115;line-height:1.4}
+  .scr .stxt{font-size:9.5px;color:#8F7F68;line-height:1.5}
+  .wcard{background:#fff;border:1px solid rgba(43,33,21,.12);border-radius:9px;padding:9px 10px}
+  .wl{height:6px;border-radius:3px;background:#E8DEC6}
+  .wl.g{background:#C7AD6F}
+  .chart{display:flex;align-items:flex-end;gap:5px;height:56px;padding-top:4px}
+  .chart i{flex:1;background:linear-gradient(180deg,#C7AD6F,#A9832A);border-radius:3px 3px 0 0;display:block}
+  .ring{width:84px;height:84px;border-radius:50%;background:conic-gradient(var(--gold) 0 65%, #EAE0C6 65% 100%);display:flex;align-items:center;justify-content:center;margin:2px auto}
+  .ring i{width:62px;height:62px;border-radius:50%;background:#FBF7EC;display:flex;flex-direction:column;align-items:center;justify-content:center;font-style:normal;font-size:9px;color:#8F7F68;font-weight:700}
+  .ring i b{font-size:13px;color:#2B2115}
+  .toast{background:var(--dark2);color:#F3E9D4;border-radius:9px;padding:8px 10px;font-size:10px;font-weight:800;display:flex;align-items:center;gap:7px}
+  .toast .c{display:inline-flex;width:16px;height:16px;border-radius:50%;background:var(--gold-bright);color:#241B10;font-size:9px;font-weight:800;align-items:center;justify-content:center}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .prod{background:#fff;border:1px solid rgba(43,33,21,.12);border-radius:8px;height:56px;position:relative;overflow:hidden}
+  .prod::before{content:"";position:absolute;inset:8px 8px 22px;background:#EFE6D0;border-radius:5px}
+  .prod::after{content:"";position:absolute;left:8px;bottom:8px;width:60%;height:6px;background:#E0D5BB;border-radius:3px}
+  .lock{position:absolute;inset:0;background:rgba(251,247,236,.55);backdrop-filter:blur(1.5px);display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:800;color:#7A6335}
+  .avrow{display:flex;align-items:center;gap:6px}
+  .av{width:24px;height:24px;border-radius:50%;background:#E4D6B4;border:2px solid #fff;box-shadow:0 0 0 1px rgba(43,33,21,.12)}
+  .av.g{background:var(--gold-soft)}
+  .phcap{margin-top:10px;text-align:center}
+  .phcap .t{font-size:12.5px;font-weight:800;color:var(--ink)}
+  .phstep{display:flex;align-items:center;color:var(--gold);font-size:16px;font-weight:800;padding-top:130px}
+  /* stat blocks + position scale (v15) */
+  .stats{display:flex;gap:30px;margin:9px 0 10px}
+  .stat .sl{font-size:11.5px;font-weight:800;color:#8F7F68;letter-spacing:.04em;margin-bottom:2px}
+  .stat .sv{font-size:24px;font-weight:800;font-family:'Noto Serif KR',serif;color:var(--ink);white-space:nowrap;line-height:1.25}
+  .stat .sc{font-size:11.5px;color:#8F7F68;font-weight:700;margin-top:1px}
+  .scale .strack{position:relative;height:24px;background:#F1E9D3;border-radius:6px;overflow:hidden}
+  .scale .sband{position:absolute;top:0;bottom:0;left:25%;width:50%;background:rgba(169,131,42,.15);border-left:1.5px dashed rgba(169,131,42,.55);border-right:1.5px dashed rgba(169,131,42,.55)}
+  .scale .sours{position:absolute;top:7px;height:10px;left:25%;width:25%;background:linear-gradient(90deg,#C7AD6F,#A9832A);border-radius:5px}
+  .scale .sticks{display:flex;justify-content:space-between;font-size:10px;font-weight:800;color:#9A8A72;margin-top:3px}
+  .scale .slegend{display:flex;gap:16px;margin-top:6px;font-size:10.5px;font-weight:800;color:#8F7F68}
+  .scale .slegend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+  .scale .slegend .lg1 i{background:rgba(169,131,42,.15);border:1.5px dashed rgba(169,131,42,.55)}
+  .scale .slegend .lg2 i{background:linear-gradient(90deg,#C7AD6F,#A9832A)}
+  .scale .scap{font-size:11.8px;color:#7A6335;font-weight:700;margin-top:5px}
+  .ph::before{content:"";position:absolute;top:6px;left:50%;transform:translateX(-50%);width:34px;height:4px;border-radius:2px;background:rgba(243,234,219,.2)}
+  .ph::after{content:"";position:absolute;bottom:5px;left:50%;transform:translateX(-50%);width:44px;height:3px;border-radius:2px;background:rgba(243,234,219,.16)}
+  .miniph::before{content:"";position:absolute;top:4px;left:50%;transform:translateX(-50%);width:22px;height:3px;border-radius:2px;background:rgba(243,234,219,.2)}
+  /* ── v11 visual components ── */
+  .tl9{display:flex;align-items:center;margin:0 0 16px}
+  .tl9 .node{background:var(--dark2);color:#F3E9D4;font-size:12.5px;font-weight:800;padding:9px 18px;border-radius:999px;white-space:nowrap;z-index:1;box-shadow:0 3px 8px rgba(36,27,16,.16)}
+  .tl9 .node.hot{background:var(--gold);color:#FFFDF6}
+  .tl9 .seg{flex:1;height:7px;background:linear-gradient(90deg,var(--gold-soft),var(--gold));position:relative;margin:0 -4px}
+  .tl9 .seg span{position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:10.5px;font-weight:800;color:#8F7F68;letter-spacing:.04em;white-space:nowrap}
+  .dlv{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;flex:1;align-content:start}
+  .dlv .item{display:flex;flex-direction:column;align-items:center;text-align:center}
+  .stage{height:196px;display:flex;align-items:center;justify-content:center;width:100%;background:#F2EAD6;border:1px solid var(--line);border-radius:8px;position:relative;overflow:hidden}
+  .miniph{width:96px;background:#241B10;border-radius:15px;padding:9px 5px 8px;box-shadow:0 9px 18px rgba(36,27,16,.22),0 2px 5px rgba(36,27,16,.14);position:relative;border:1px solid rgba(233,202,128,.12)}
+  .miniph .ms{background:#FBF7EC;border-radius:9px;height:158px;padding:9px 8px;display:flex;flex-direction:column;gap:5px}
+  .miniph .mlogo{font-size:6.5px;font-weight:800;letter-spacing:.1em;color:#A9832A}
+  .miniph .mh{font-size:9px;font-weight:800;color:#2B2115;line-height:1.35}
+  .miniph .mchart{display:flex;align-items:flex-end;gap:3px;height:34px}
+  .miniph .mchart i{flex:1;background:linear-gradient(180deg,#C7AD6F,#A9832A);border-radius:2px 2px 0 0}
+  .miniph .mtoast{background:var(--dark2);color:#F3E9D4;border-radius:6px;padding:4px 6px;font-size:6.5px;font-weight:800}
+  .doc{width:122px;height:156px;background:#fff;border:1px solid rgba(43,33,21,.18);border-radius:6px;box-shadow:0 4px 10px rgba(36,27,16,.14);padding:12px 11px}
+  .doc .dtit{font-size:8px;font-weight:800;letter-spacing:.08em;color:#A9832A;margin-bottom:7px}
+  .doc .dl{height:5px;border-radius:3px;background:#E8DEC6;margin:6px 0}
+  .doc .dl.g{background:#C7AD6F}
+  .doc .dchart{display:flex;align-items:flex-end;gap:3px;height:44px;margin-top:9px}
+  .doc .dchart i{flex:1;background:linear-gradient(180deg,#C7AD6F,#A9832A);border-radius:2px 2px 0 0}
+  .doc .dnum{font-size:13px;font-weight:800;color:#2B2115;font-family:'Noto Serif KR',serif;margin-top:6px}
+  .dstack{position:relative;width:150px;height:164px}
+  .dstack .doc{position:absolute;left:6px;top:0}
+  .dstack .doc.b1{transform:rotate(-5deg);top:8px;left:0}
+  .dstack .doc.b2{transform:rotate(3deg);top:4px;left:14px}
+  .dlv h4{margin-top:13px;font-size:15px;font-weight:800;color:var(--ink)}
+  .dlv p{font-size:12.6px;margin-top:4px;color:var(--ink-soft)}
+  .orbitwrap{display:flex;gap:34px;align-items:center;flex:1}
+  .orbit{position:relative;width:340px;height:340px;flex:0 0 auto}
+  .orbit .oring{position:absolute;border-radius:50%;left:50%;top:50%;transform:translate(-50%,-50%)}
+  .orbit .r3{width:340px;height:340px;border:1.5px dashed rgba(169,131,42,.42);background:rgba(233,202,128,.07)}
+  .orbit .r2{width:222px;height:222px;border:1.5px solid rgba(169,131,42,.6);background:rgba(233,202,128,.16)}
+  .orbit .r1{width:116px;height:116px;background:radial-gradient(circle at 35% 28%,#C2A050,var(--gold) 72%);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#FFFDF6;box-shadow:0 6px 16px rgba(169,131,42,.35)}
+  .orbit .r1 b{font-size:17px;font-family:'Noto Serif KR',serif;color:#FFFDF6}
+  .orbit .r1 span{font-size:9.5px;font-weight:800;letter-spacing:.04em}
+  .orbit .olab{position:absolute;left:50%;transform:translateX(-50%);background:#FFFDF6;border:1px solid rgba(169,131,42,.45);border-radius:999px;padding:3px 12px;font-size:10.5px;font-weight:800;color:#7A6335;white-space:nowrap;box-shadow:0 2px 6px rgba(36,27,16,.1)}
+  .orbit .olab.l2{bottom:64px}
+  .orbit .olab.l3{bottom:-4px}
+  .fly{position:relative;width:250px;height:250px;flex:0 0 auto}
+  .fly .fring{position:absolute;inset:26px;border:2.5px dashed rgba(169,131,42,.5);border-radius:50%}
+  .fly .fa{position:absolute;color:var(--gold);font-size:17px;font-weight:800;width:18px;height:18px;line-height:18px;text-align:center}
+  .fly .fn{position:absolute;background:#FFFDF6;border:1.5px solid rgba(169,131,42,.55);border-radius:999px;padding:6px 12px;font-size:11px;font-weight:800;color:var(--ink);white-space:nowrap;box-shadow:0 3px 9px rgba(36,27,16,.12)}
+  .fly .fn.gold{background:var(--gold);color:#FFFDF6;border-color:var(--gold)}
+  .fly .fc{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;font-size:12px;font-weight:800;color:var(--gold);line-height:1.5}
+  .cb .row{display:grid;grid-template-columns:112px 1fr 168px;gap:10px;align-items:center;margin:9px 0}
+  .cb .lab{font-size:12.5px;font-weight:800;color:var(--ink)}
+  .cb .track{height:15px;background:#ECE3CE;border-radius:8px;position:relative;overflow:hidden}
+  .cb .fill{position:absolute;left:0;top:0;bottom:0;border-radius:8px;background:linear-gradient(90deg,#C7AD6F,#A9832A)}
+  .cb .val{font-size:12.3px;font-weight:800;color:var(--ink)}
+  .gauge{margin-top:10px}
+  .gauge .gtrack{height:13px;background:#ECE3CE;border-radius:7px;position:relative}
+  .gauge .gband{position:absolute;top:0;bottom:0;left:20%;width:40%;background:rgba(169,131,42,.18);border-left:1px dashed var(--gold);border-right:1px dashed var(--gold)}
+  .gauge .gfill{position:absolute;top:0;bottom:0;left:0;width:32%;border-radius:7px;background:linear-gradient(90deg,#C7AD6F,#A9832A)}
+  .gauge .gcap{display:flex;justify-content:space-between;font-size:10px;font-weight:800;color:#8F7F68;margin-top:4px}
+  .door{width:22px;height:32px;border:1.6px solid var(--gold);border-bottom:none;border-radius:10px 10px 0 0;position:relative;margin-bottom:9px}
+  .door::after{content:"";position:absolute;left:-6px;right:-6px;bottom:-1px;height:1.6px;background:var(--gold)}
+  .door.open::before{content:"";position:absolute;inset:-1px;background:linear-gradient(160deg,#C2A050,var(--gold));border-radius:10px 10px 0 0;transform-origin:left center;transform:perspective(70px) rotateY(42deg);box-shadow:4px 0 9px rgba(169,131,42,.32)}
+  .door.closed{border-color:var(--gold-soft)}
+  .door.closed::after{background:var(--gold-soft)}
+  .door.closed::before{content:"";position:absolute;right:4px;top:15px;width:3px;height:3px;border-radius:50%;background:var(--gold-soft)}
+  .rel{display:flex;align-items:center;gap:13px;margin:2px 0 14px}
+  .rel .rbox{background:#F6EFDC;border:1px solid rgba(169,131,42,.45);border-radius:8px;padding:9px 18px;font-size:13px;font-weight:800;color:var(--ink)}
+  .rel .rbox span{display:block;font-size:10.5px;font-weight:700;color:#8F7F68;margin-top:1px}
+  .rel .rarr{color:var(--gold);font-weight:800;font-size:18px}
+  @media print{
+    body{background:#fff}
+    .slide{margin:0;box-shadow:none;page-break-after:always}
+    @page{size:1280px 720px;margin:0}
+  }
+</style>
+</head>
+<body>
+
+<!-- 1 · COVER -->
+<div class="slide dark">
+  <div class="shead"><span>Confidential · 바디프랜드 귀중</span><span>LICHE · 2026.07</span></div>
+  <div class="center">
+    <div class="kicker">Bodyfriend Beyond · Membership Metaverse</div>
+    <div style="font-size:14px;color:#C7AD6F;font-weight:700;letter-spacing:.12em;margin-top:14px">바디프랜드 멤버십 메타버스</div>
+    <div class="cover-title">바디프랜드 비욘드</div>
+    <div class="cover-sub">첫 2개월 — 계약 ① 구현 범위 제안</div>
+    <div class="hr-gold"></div>
+    <div class="cover-quote">
+      <b style="color:var(--gold-bright);font-size:17.5px">9월, 새 라인업과 함께 계정 기반의 고객 경험이 기본이 됩니다.</b><br>
+      이 문서는 그 첫 고객을 맞을 <b>멤버십 앱을 두 달 안에 준비</b>하는 계획입니다.
+    </div>
+    <div class="hr-gold"></div>
+    <div class="tagline">제안 리체 · 바디프랜드 전용 프로젝트 · 대외비</div>
+    <div class="tagline" style="margin-top:10px;font-size:10px;letter-spacing:.06em;color:#8F7C5E">본 문서에 언급된 출시 일정·제품 관련 내용은 협의 과정에서 논의된 계획을 기준으로 하며, 공식 확정에 따릅니다.</div>
+  </div>
+</div>
+
+<!-- 2 · 왜 지금 — 9월 -->
+<div class="slide">
+  <div class="shead"><span>01 · 왜 지금인가</span><span>바디프랜드 비욘드</span></div>
+  <div class="secno">01 · 왜 지금인가 — 9월이 정해 준 일정</div>
+  <h1 class="serif">9월,<br>계정 결합이 <span class="g">선택에서 기본</span>으로 바뀝니다.</h1>
+  <p class="lead">9월, AI 프로 라인업(다빈치·퀀텀·733)의 출시와 함께 마사지맵 자동 생성 기능이 도입됩니다.<br>통합로그인은 지금도 연동되어 있지만, 지금까지는 선택이었습니다 — 마사지맵부터는 계정이 사실상 기본이 되어, 계정 결합 사용 데이터가 본격적으로 쌓입니다.</p>
+  <div class="tl9" style="margin-top:24px">
+    <div class="node hot">2026년 7월 — 계약 ① 착수</div>
+    <div class="seg" style="flex:2"><span>8주 — 검증 · 구현 · 설계</span></div>
+    <div class="node">9월 — AI 프로 출시 · 씨앗 첫 로그인</div>
+    <div class="seg" style="flex:3;background:#E4D8BC"><span>계정 결합 데이터가 쌓이는 기간</span></div>
+    <div class="node" style="background:#EAE0C6;color:#7A6335">12월 — 기존 AI 제품까지 확대 · 베타</div>
+  </div>
+  <div class="cols c3">
+    <div class="card"><h4><span class="num">1</span>AI 프로 출시</h4><p>생성형 AI가 맞춤 마사지맵을 만들어 주는 새 라인업 — <b>데이터 전략의 전환점이 될 시점</b>입니다.</p></div>
+    <div class="card"><h4><span class="num">2</span>선택에서 기본으로</h4><p>마사지맵은 계정 위에서 동작합니다 — 선택이던 로그인이 사실상 기본이 되면서, <b>고객 정보와 묶인 기기 사용 데이터</b>가 쌓이기 시작합니다.</p></div>
+    <div class="card gold"><h4><span class="num">3</span>계정에 담길 이유</h4><p>천만 원대 기기를 들인 고객이 처음 여는 화면 — 거기에 <b>리포트·코인·혜택이 바로 보여야</b> 로그인이 습관이 됩니다. 그 화면을 준비하는 것이 계약 ①입니다.</p></div>
+  </div>
+  <div class="band">9월, 고객이 처음 계정을 만드는 순간은 <span class="g">한 번뿐</span>입니다. 그 화면이 비어 있으면 첫인상은 되돌릴 수 없습니다 — 그래서 <span class="g">준비 시한은 2026년 7월 착수</span>입니다.</div>
+  <div class="docstrip">비욘드의 전체 구상(세계관·4개 층·등급·코인 3단계)은 7월 16일 발표로 갈음합니다 · 이 문서는 5개월 · 3개 독립 계약 중 <b>첫 번째 — 계약 ①(2개월)</b>의 실행 범위만 다룹니다</div>
+  <div class="sfoot">02 / 14</div>
+</div>
+
+<!-- 3 · 첫 로그인의 장면 (목업) -->
+<div class="slide">
+  <div class="shead"><span>02 · 첫 로그인의 장면</span><span>바디프랜드 비욘드</span></div>
+  <div class="secno">02 · 첫 로그인의 장면 — 9월, 고객이 만나는 화면</div>
+  <h1 class="serif">첫 3분 — 고객은 <span class="g">이런 화면</span>을 만납니다.</h1>
+  <div class="phones">
+    <div class="phwrap">
+      <div class="ph"><div class="scr">
+        <div class="top"><span class="logo">BODYFRIEND BEYOND</span></div>
+        <div class="htxt">반갑습니다,<br>멤버가 되셨습니다</div>
+        <div class="stxt">기기 등록이 확인되었습니다.<br>당신의 멤버십이 열립니다.</div>
+        <div class="wcard"><div class="wl g" style="width:70%"></div><div class="wl" style="width:45%;margin-top:6px"></div></div>
+        <div class="toast"><span class="c">W</span>웰컴 코인이 도착했습니다</div>
+      </div></div>
+      <div class="phcap"><div class="t">온보딩 <span class="tag sample">샘플</span></div></div>
+    </div>
+    <div class="phwrap">
+      <div class="ph"><div class="scr">
+        <div class="top"><span class="logo">내 몸 리포트</span><span class="coin">주간</span></div>
+        <div class="htxt">지난주의 나</div>
+        <div class="chart"><i style="height:34%"></i><i style="height:52%"></i><i style="height:40%"></i><i style="height:66%"></i><i style="height:58%"></i><i style="height:82%"></i><i style="height:74%"></i></div>
+        <div class="wcard"><div class="stxt"><b style="font-size:10px;color:#2B2115">오늘의 미션</b><br>목·어깨 집중 케어 15분</div></div>
+      </div></div>
+      <div class="phcap"><div class="t">내 몸 리포트 <span class="tag live">실데이터</span></div></div>
+    </div>
+    <div class="phwrap">
+      <div class="ph"><div class="scr">
+        <div class="top"><span class="logo">건강코인</span><span class="coin">1,240 C</span></div>
+        <div class="htxt">케어를 마쳤습니다</div>
+        <div class="toast"><span class="c">+</span>15 코인 적립</div>
+        <div class="wcard"><div class="stxt"><b style="font-size:10px;color:#2B2115">이번 주 3회째</b> — 연속 기록이 쌓이는 중</div><div class="wl g" style="width:60%;margin-top:6px"></div></div>
+      </div></div>
+      <div class="phcap"><div class="t">코인 루프 <span class="tag live">실데이터</span></div></div>
+    </div>
+    <div class="phwrap">
+      <div class="ph"><div class="scr">
+        <div class="top"><span class="logo">멤버십</span></div>
+        <div class="ring"><i><b>65%</b>라운지까지</i></div>
+        <div class="stxt" style="text-align:center">프렌드 → <b style="color:#7A6335">라운지</b><br>케어 5일이면 다음 문이 열립니다</div>
+        <div class="avrow" style="justify-content:center"><span class="av g"></span><span class="av"></span><span class="av"></span><span class="stxt" style="font-size:8.5px">가족 합산 중</span></div>
+      </div></div>
+      <div class="phcap"><div class="t">등급 · 가족 <span class="tag sample">샘플</span></div></div>
+    </div>
+    <div class="phwrap">
+      <div class="ph"><div class="scr">
+        <div class="top"><span class="logo">웰니스 셀렉트</span><span class="coin">라운지 전용</span></div>
+        <div class="grid2"><div class="prod"></div><div class="prod"></div><div class="prod"></div><div class="prod"></div></div>
+        <div class="lock" style="position:relative;height:26px;background:none;backdrop-filter:none">라운지 등급부터 열립니다</div>
+      </div></div>
+      <div class="phcap"><div class="t">셀렉트 <span class="tag visual">콘셉트</span></div></div>
+    </div>
+  </div>
+  <div class="footnote" style="text-align:center;margin-top:12px">화면은 방향을 보여드리기 위한 목업이며, 실데이터/샘플/콘셉트 표기는 2개월 납품 시점의 데이터 상태를 뜻합니다.<br>이 다섯 장면이 하나의 흐름으로 동작하는 것 — 그것이 계약 ①의 결과물입니다.</div>
+  <div class="sfoot">03 / 14</div>
+</div>
+
+<!-- 4 · 2개월의 목표 -->
+<div class="slide">
+  <div class="shead"><span>03 · 2개월의 목표</span><span>바디프랜드 비욘드</span></div>
+  <div class="secno">03 · 2개월의 목표</div>
+  <h1 class="serif">9월 출시 고객을 맞을 <span class="g">동작하는 앱</span>을 만듭니다.</h1>
+  <p class="lead">전 기능의 일부를 넓게 만드는 것이 아니라 —<br><b>한 고객이 처음부터 끝까지 겪는 완결된 경험 하나</b>를 완성합니다. 대작 게임이 본개발 전에 반드시 거치는 검증 방식입니다.</p>
+  <div class="dlv">
+    <div class="item">
+      <div class="stage">
+        <div class="miniph"><div class="ms">
+          <div class="mlogo">BODYFRIEND BEYOND</div>
+          <div class="mh">지난주의 나</div>
+          <div class="mchart"><i style="height:40%"></i><i style="height:62%"></i><i style="height:48%"></i><i style="height:80%"></i><i style="height:70%"></i></div>
+          <div class="mtoast">+15 코인 적립</div>
+          <div class="mh" style="font-size:7.5px;color:#7A6335">라운지까지 65%</div>
+        </div></div>
+      </div>
+      <h4><span class="num">1</span>동작하는 앱</h4>
+      <p>앞 장의 다섯 장면이 <b>하나의 흐름</b>으로 — 기기 연동을 받을 준비가 된 상태로 완성됩니다.</p>
+    </div>
+    <div class="item">
+      <div class="stage">
+        <div class="doc">
+          <div class="dtit">검증 리포트</div>
+          <div class="dchart"><i style="height:55%"></i><i style="height:78%"></i><i style="height:42%"></i><i style="height:90%"></i><i style="height:64%"></i><i style="height:72%"></i></div>
+          <div class="dnum">연동 가능 모수 ○○,○○○</div>
+          <div class="dl g" style="width:76%"></div>
+          <div class="dl" style="width:58%"></div>
+        </div>
+      </div>
+      <h4><span class="num">2</span>숫자로 확정한 검증</h4>
+      <p>팬텀·파라오 실측으로 <b>리포트 성립 범위와 공식 모수 확정</b> + 9월 데이터 수집 체계 설계.</p>
+    </div>
+    <div class="item">
+      <div class="stage">
+        <div class="dstack">
+          <div class="doc b1"><div class="dtit">KPI 체계</div><div class="dl" style="width:80%"></div><div class="dl" style="width:64%"></div><div class="dl g" style="width:72%"></div></div>
+          <div class="doc b2"><div class="dtit">투입 규모 산출</div><div class="dl" style="width:70%"></div><div class="dl g" style="width:56%"></div><div class="dl" style="width:78%"></div></div>
+          <div class="doc"><div class="dtit">혜택 마스터플랜</div><div class="dl g" style="width:82%"></div><div class="dl" style="width:66%"></div><div class="dl" style="width:74%"></div><div class="dl g" style="width:52%"></div><div class="dl" style="width:70%"></div></div>
+        </div>
+      </div>
+      <h4><span class="num">3</span>다음 계약의 판단 재료</h4>
+      <p>혜택 마스터플랜(원가 모델) · KPI · 투입 산출 · 역할 분담안 — <b>계약 ②를 판단할 자료 일체</b>.</p>
+    </div>
+  </div>
+  <div class="band">측정하는 것은 규모가 아니라 <span class="g">깊이</span>입니다 — 로그인 전환율 · 기기 연동률 · 리포트 열람 · 케어 리텐션 · 코인 사용률.</div>
+  <div class="sfoot">04 / 14</div>
+</div>
+
+<!-- 5 · 씨앗 3,000 -->
+<div class="slide">
+  <div class="shead"><span>04 · 전략</span><span>바디프랜드 비욘드</span></div>
+  <div class="secno">04 · 씨앗에서 확산으로</div>
+  <h1 class="serif">10만으로 가는 길은,<br><span class="g">가장 뜨거운 3,000</span>에서 시작됩니다.</h1>
+  <p class="lead">확산에는 순서가 있습니다 —<br>생태계와 혜택을 온전히 쓸 수 있는 고객에서 시작해,<br>검증된 충성도와 활용도를 근거로 전체 고객으로 넓히는 것이 가장 빠르고 확실한 길입니다.</p>
+  <div class="orbitwrap">
+    <div class="orbit">
+      <div class="oring r3"></div>
+      <div class="oring r2"></div>
+      <div class="oring r1"><span>씨앗</span><b>3,000</b><span>가구</span></div>
+      <div class="olab l2">활성 10만 — 확산 목표</div>
+      <div class="olab l3">고객 150만 · 가족 500만</div>
+    </div>
+    <div class="cols" style="grid-template-columns:1fr;gap:12px;align-content:center">
+      <div class="card gold"><h4>씨앗 — 약 3,000가구</h4><p>9월 신규 라인업의 첫 진입 고객. 기기·데이터·혜택이 모두 연결되는 <b>완전한 멤버십 경험의 첫 멤버들</b>입니다.</p></div>
+      <div class="card"><h4>실증 — 깊이의 증명</h4><p>이 3,000가구의 로그인·연동·리텐션·코인 사용이 <b>"이 멤버십은 작동한다"의 증거</b>가 됩니다.</p></div>
+      <div class="card"><h4>확산 — 150만 → 활성 10만</h4><p>기존 고객 150만을 불러와 활성 10만으로 — <b>확산 여부를 판단할 공식(전환율·리텐션·가구당 비용)이 계약 ①의 결과에서 나옵니다.</b></p></div>
+    </div>
+  </div>
+  <div class="footnote">씨앗 규모는 출시 계획 공식 확인 시 확정 기입합니다.</div>
+  <div class="sfoot">05 / 14</div>
+</div>
+
+<!-- 8 · 혜택의 값 -->
+<div class="slide">
+  <div class="shead"><span>05 · 혜택의 값</span><span>바디프랜드 비욘드</span></div>
+  <div class="secno">05 · 혜택의 값 — 이 멤버십은 얼마짜리인가</div>
+  <h1 class="serif">혜택의 비용은,<br><span class="g">활성 가구당 월 5천~1만 원</span> 수준으로 설계합니다.</h1>
+  <p class="lead">"이 혜택들에 돈이 얼마나 드는가"에 대한 사전 답변입니다.<br>모든 수치는 국내외 벤치마크 기반의 추정 레인지이며 — 정확한 원가와 예산은 계약 ①에서 실측으로 확정합니다.</p>
+  <div class="cols c2" style="gap:12px;align-items:start;flex:0 0 auto">
+    <div class="card" style="padding:15px 18px">
+      <h4>혜택 비용의 구조 — 전부 계산에 넣었습니다</h4>
+      <ul>
+        <li><b>현금성</b> — 건강코인 리워드(케어 활동 적립): 활성 가구당 월 5천~1만 원 상당. 발행분의 20~40%는 통상 미사용이라 실비는 더 낮음</li>
+        <li><b>일회성</b> — 웰컴 코인(구매가의 1% 미만) · 럭키드로우 경품 · 733 디너 등 이벤트</li>
+        <li><b>비현금</b> — 셀렉트 노마진 딜(이익을 남기지 않는 것이지 지출이 아님) · 등급 우대 · 가족 계정</li>
+      </ul>
+      <div class="stats">
+        <div class="stat"><div class="sl">씨앗 — 3,000가구</div><div class="sv">연 2~5억</div></div>
+        <div class="stat"><div class="sl">확산 — 활성 10만 가구</div><div class="sv">연 40~85억</div><div class="sc">매출 대비 약 1~2%</div></div>
+      </div>
+      <div class="scale">
+        <div class="strack"><div class="sband"></div><div class="sours"></div></div>
+        <div class="sticks"><span>0%</span><span>1%</span><span>2%</span><span>3%</span><span>4%</span></div>
+        <div class="slegend"><span class="lg1"><i></i>글로벌 멤버십 표준 밴드 1~3%</span><span class="lg2"><i></i>비욘드 — 확산 시 1~2%</span></div>
+        <div class="scap">매출 대비 리워드 비용 — 표준 밴드 안, 그 아래쪽으로 설계합니다.</div>
+      </div>
+    </div>
+    <div class="card dark2" style="padding:15px 18px">
+      <h4>참고 — 함께 놓아 볼 숫자들</h4>
+      <ul class="facts">
+        <li>TV홈쇼핑 실질 판매수수료율 <b>27.7%</b> (공정거래위원회, 2024년 거래 기준)</li>
+        <li>광고·홈쇼핑 지출 <b>연 700~800억</b> (7월 16일 발표 자리에서 공유된 규모)</li>
+      </ul>
+      <div style="margin-top:9px;border-top:1px solid rgba(233,202,128,.25);padding-top:7px">
+        <p style="font-size:11.5px;font-weight:800;color:#CBBBA0;margin-bottom:1px">멤버십이 자리 잡으면 —</p>
+        <ul class="facts">
+          <li>회원은 비회원보다 <b>10~25% 더 씁니다</b> (글로벌 평균)</li>
+          <li>코스트코: 멤버십 회비가 <b>영업이익의 절반</b>, 갱신율 90%</li>
+          <li>아마존 프라임: 회원이 비회원의 <b>2.3배</b>를 씁니다</li>
+        </ul>
+        <p class="footnote" style="margin-top:3px">출처·세부 근거는 혜택 마스터플랜에 첨부합니다.</p>
+      </div>
+    </div>
+  </div>
+  <div class="band" style="margin-bottom:6px">산식과 재원 부담 구조까지 담은 원가 모델·리워드 예산안이 계약 ①의 정식 납품물입니다 — <span class="g">다음 장은 이 비용이 시작하는 매출</span>입니다.</div>
+  <div class="sfoot">06 / 14</div>
+</div>
+
+<!-- 9 · 이 비용이 시작하는 매출 -->
+<div class="slide">
+  <div class="shead"><span>05 · 혜택의 값</span><span>바디프랜드 비욘드</span></div>
+  <div class="secno">05 · 혜택의 값 — 이 비용이 시작하는 매출</div>
+  <h1 class="serif">이 혜택 위에서,<br><span class="g">세 개의 매출</span>이 시작됩니다.</h1>
+  <p class="lead" style="margin-bottom:10px">이미 곁에 있는 고객 150만의 <b>다음 매출을 여는 장치</b> —<br>이 멤버십의 리워드는 그 장치의 가동 비용입니다.<br>리워드가 돌리는 바퀴에서 세 갈래의 매출이 나옵니다.</p>
+  <div style="display:flex;gap:30px;align-items:center;flex:1;min-height:0">
+    <div class="fly">
+      <div class="fring"></div>
+      <div class="fn gold" style="top:12px;left:50%;transform:translateX(-50%)">리워드 · 혜택</div>
+      <div class="fn" style="top:50%;right:-6px;transform:translateY(-50%)">매일 열리는 앱</div>
+      <div class="fn" style="bottom:12px;left:50%;transform:translateX(-50%)">케어 · 데이터 · 등급</div>
+      <div class="fn" style="top:50%;left:-6px;transform:translateY(-50%)">매출 → 재원</div>
+      <div class="fa" style="top:46px;right:46px;transform:rotate(45deg)">▸</div>
+      <div class="fa" style="bottom:46px;right:46px;transform:rotate(135deg)">▸</div>
+      <div class="fa" style="bottom:46px;left:46px;transform:rotate(225deg)">▸</div>
+      <div class="fa" style="top:46px;left:46px;transform:rotate(315deg)">▸</div>
+      <div class="fc">리워드<br>선순환</div>
+    </div>
+    <div class="cols" style="grid-template-columns:1fr;gap:9px;align-content:center;font-size:12.8px">
+      <div class="card gold" style="padding:12px 16px"><h4><span class="num">1</span>구독 — 전환보다 유지가 승부입니다</h4><p style="font-size:12.7px;line-height:1.55">연말로 준비 중인 AI 기능 구독이 시작되면, <b>파는 것보다 지키는 것이 어려운 사업</b>이 함께 시작됩니다. 넷플릭스가 보여줬듯 구독을 지키는 것은 <b>매일 열어 볼 이유</b>입니다 — 리포트·코인·혜택이 그 이유를 만들고, 유지율이 곧 매출이 됩니다.</p></div>
+      <div class="card gold" style="padding:12px 16px"><h4><span class="num">2</span>재구매 · 업셀</h4><p style="font-size:12.7px;line-height:1.55">새 AI 기능은 신규 라인업에서 시작되므로 <b>기존 기기 고객이 가장 가까운 업그레이드 수요층</b>입니다. 등급과 코인이 그 교체 수요와 가족의 첫 구매를 회사 안으로 되돌립니다.</p></div>
+      <div class="card gold" style="padding:12px 16px"><h4><span class="num">3</span>직거래 매출</h4><p style="font-size:12.7px;line-height:1.55">셀렉트는 검증된 회원에게만 여는 자기 채널 — <b>판매수수료 없는 회원 전용 매출</b>이 기존 직판 채널 위에 더해집니다.</p></div>
+    </div>
+  </div>
+  <div class="band">여기에 733 소사이어티 — <span class="g">VIP를 대접하는 회사</span>라는 브랜드 자산까지. 리워드는 판매의 끝이 아니라 <span class="g">다음 매출의 시작점</span>에 서 있습니다.</div>
+  <div class="sfoot">07 / 14</div>
+</div>
+
+<!-- 6 · 어떻게 2개월이 가능한가 -->
+<div class="slide">
+  <div class="shead"><span>06 · 수행 방식</span><span>바디프랜드 비욘드</span></div>
+  <div class="secno">06 · 수행 방식 — 두 달이 가능한 이유</div>
+  <h1 class="serif">두 달이 가능한 이유 —<br><span class="g">100% AI 네이티브 개발</span>입니다.</h1>
+  <p class="lead">개발 속도의 문제이자 — 이후 수년간의 운영·유지보수 비용 구조의 문제입니다.<br>세 트랙이 순차가 아니라 겹쳐 달리기에, 8주가 성립합니다.</p>
+  <div class="gantt">
+    <div class="ghead">
+      <div></div>
+      <div class="wkhead"><span>1주</span><span>2주</span><span>3주</span><span>4주</span><span>5주</span><span>6주</span><span>7주</span><span>8주</span></div>
+    </div>
+    <div class="grow">
+      <div class="glabel">A · 검증</div>
+      <div class="glane">
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+        <div class="bar a" style="grid-column:1/span 4">데이터 실측 · 모수 확정 · 수집 설계</div>
+      </div>
+    </div>
+    <div class="grow">
+      <div class="glabel">B · 구현</div>
+      <div class="glane">
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+        <div class="bar b" style="grid-column:3/span 6">리포트 · 코인 루프 · 등급 · 온보딩</div>
+      </div>
+    </div>
+    <div class="grow">
+      <div class="glabel">C · 설계</div>
+      <div class="glane">
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+        <div class="bar c" style="grid-column:5/span 4">혜택 원가 · KPI · 투입 · 역할 분담안</div>
+      </div>
+    </div>
+  </div>
+  <div class="cols c3" style="margin-top:8px;flex:0 0 auto">
+    <div class="card"><h4>속도</h4><p>소수 정예 × AI 개발 — 계절·캠페인 콘텐츠를 개발자 손을 거의 거치지 않고 갱신하는 구조까지 함께 만들어집니다.</p></div>
+    <div class="card"><h4>단일 코드베이스</h4><p>AI 개발·유지보수 효율은 <b>하나의 일관된 코드베이스</b>에서 극대화됩니다 — 검증 단계를 단일 코드베이스로 시작하는 이유입니다.</p></div>
+    <div class="card"><h4>해 본 손</h4><p>리체를 이끄는 손은 <b>누적 1,200만 명이 즐긴 라이브 서비스</b>를 설계·운영했습니다. 이 규모의 리텐션 설계를 만들어 본 경험이 8주의 근거입니다.</p></div>
+  </div>
+  <div class="sfoot">08 / 14</div>
+</div>
+
+<!-- 7 · 왜 리체 단독인가 -->
+<div class="slide">
+  <div class="shead"><span>06 · 수행 방식</span><span>바디프랜드 비욘드</span></div>
+  <div class="secno">06 · 수행 방식 — 두 달의 역할</div>
+  <h1 class="serif">바디프랜드는 <span class="g">출시에 집중</span>하십시오.<br>두 달 뒤, 결과만 판정하시면 됩니다.</h1>
+  <p class="lead">9월 출시를 앞둔 시기입니다 —<br>검증 2개월은 리체가 전담하고, 바디프랜드는 별도 개발 인력 투입 없이 결과를 받아 보시면 됩니다.</p>
+  <div class="rel">
+    <div class="rbox">리체<span>2개월 전담 실행</span></div>
+    <div class="rarr">→</div>
+    <div class="rbox" style="background:#FFFDF6">동작하는 앱 + 검증 데이터 + 마스터플랜<span>납품물 일체</span></div>
+    <div class="rarr">→</div>
+    <div class="rbox">바디프랜드<span>검수 · 판정 · 다음 결정</span></div>
+  </div>
+  <div class="cols c3">
+    <div class="card gold"><h4>원안 그대로 검증</h4><p>이번 두 달의 산출물은 <b>"발표된 구상이 실제로 작동하는가"에 대한 답</b>이어야 합니다. 리체는 구상 원안을 그대로 구현하고, 그 원안으로 판정받겠습니다.</p></div>
+    <div class="card gold"><h4>책임의 단일화</h4><p>리체가 전담하므로 결과가 부족하면 <b>원인이 명확합니다</b> — 판정이 쉬운 구조가 다음 결정을 빠르게 만듭니다.</p></div>
+    <div class="card gold"><h4>9월은 기존 앱과 투트랙입니다</h4><p>이전설치·렌탈 정보·결제 변경 등 서비스 기능은 <b>기존 앱이 그대로</b> 맡고, 비욘드 앱에서 해당 메뉴로 바로 연결해 <b>고객이 두 앱을 구분할 필요가 없게</b> 합니다. 투트랙은 두 개를 만드는 비용이 아니라 <b>잘못 합치는 비용을 막는 장치</b>입니다 — 한 달의 공존 데이터가 쌓이면, 무엇을 합칠지 실사용 결과 위에서 정하시면 됩니다.</p></div>
+  </div>
+  <div class="band">실행은 리체가, 결정은 바디프랜드가 맡는 두 달입니다 — <span class="g">판단 재료(역할 분담안)는 리체가 만들어 제출</span>합니다.</div>
+  <div class="sfoot">09 / 14</div>
+</div>
+
+<!-- 11 · 8주 일정 -->
+<div class="slide">
+  <div class="shead"><span>07 · 일정과 진행</span><span>바디프랜드 비욘드</span></div>
+  <div class="secno">07 · 8주 일정 · 보고 체계</div>
+  <h1 class="serif">6주차에 동작 버전이 나오고,<br>8주차에 <span class="g">9월 첫 로그인을 받을 준비</span>가 끝납니다.</h1>
+  <div class="wkline">
+    <div class="wkbox">1주</div>
+    <div class="wkbox rep">2주<span class="rp">서면 보고</span></div>
+    <div class="wkbox">3주</div>
+    <div class="wkbox rep">4주<span class="chip">검증 리포트 · 목표치 합의</span><span class="rp">서면 보고</span></div>
+    <div class="wkbox">5주</div>
+    <div class="wkbox hot rep">6주<span class="chip hot">슬라이스 α — 출시 전 도달</span><span class="rp">서면 보고</span></div>
+    <div class="wkbox">7주</div>
+    <div class="wkbox rep">8주<span class="chip">최종 납품 · 출시 대응</span><span class="rp">서면 보고</span></div>
+  </div>
+  <div class="cols c3" style="margin-top:20px">
+    <div class="card"><h4>착수 시점이 여유를 정합니다</h4><p>7월 안에 착수하면 <b>동작 버전(α)이 9월 출시 전에 도달</b>합니다. 착수가 늦어질수록 α와 출시 사이의 여유가 줄어듭니다.</p></div>
+    <div class="card"><h4>전자계약 · 2주 단위 서면 보고</h4><p>계약은 전자계약으로 진행하고, 진행 상황을 2주 단위 서면 보고로 공유합니다 — 대면 없이도 진행이 멈추지 않는 체계입니다.</p></div>
+    <div class="card"><h4>판정 지표는 고정, 목표치는 4주차 확정</h4><p>판정 지표 5종(로그인 전환·기기 연동률·리포트 열람·케어 리텐션·코인 사용률)은 <b>지금 고정</b>되고, 4주차에 정하는 것은 목표치뿐입니다. 합의가 불발되면 <b>해당 지표에 한해</b> 7월 16일 발표에서 리체가 공표한 기준(연동률 50% · 열람률 40% · 정착률 25% · 코인 사용률 40%)을 기본값으로 적용합니다 — 이 목표치는 <b>다음 계약 진행 판단의 기준</b>입니다.</p></div>
+  </div>
+  <div class="band">필요한 협조는 고객 동의·보안 절차 안에서의 데이터 접근과 주 1회 창구 협의 — <span class="g">자료 제공 일정과 무관하게 착수 가능합니다.</span> 1~2주차는 설계·구축 구간, 데이터는 수령 즉시 투입됩니다.</div>
+  <div class="sfoot">10 / 14</div>
+</div>
+
+<!-- 10 · 지금 여는 것 / 검증이 여는 것 -->
+<div class="slide">
+  <div class="shead"><span>08 · 다음 단계</span><span>바디프랜드 비욘드</span></div>
+  <div class="secno">08 · 지금 여는 것, 검증이 여는 것</div>
+  <h1 class="serif">계약 ①은 <span class="g">첫 번째 문</span>입니다 —<br>나머지 문은 검증이 엽니다.</h1>
+  <p class="lead">아래 오른쪽은 하지 않는 일이 아니라 — <b>이번 검증을 통과하면 하게 될 일</b>입니다.<br>순서를 지키는 것이 전체를 가장 빨리 가는 길입니다.</p>
+  <div class="cols c2">
+    <div class="card gold"><div class="door open"></div><h4>지금 — 계약 ①이 여는 것 (2개월)</h4>
+      <ul>
+        <li>9월 출시 고객을 맞는 <b>동작하는 멤버십 앱</b> (첫 로그인 ~ 등급까지)</li>
+        <li>씨앗 3,000가구 파일럿 설계와 <b>데이터 실측 · 수집 체계</b></li>
+        <li>혜택 마스터플랜 · 원가 모델 · KPI · 투입 산출 · 역할 분담안</li>
+      </ul>
+    </div>
+    <div class="card"><div class="door closed"></div><h4>검증 통과 후 — 다음 계약이 여는 것</h4>
+      <ul>
+        <li><b>기존 앱과의 통합</b> — 공존 기간의 사용 결과가 정하는 방향으로</li>
+        <li><b>확산</b> — 기존 고객 150만을 불러오는 유입 설계, 활성 10만으로</li>
+        <li><b>코인 경제 2·3단계</b> — 크레딧·시장 개방 (별도 승인)</li>
+        <li><b>소사이어티 거래 보증</b> — 인증·보증·평판 구조 (별도 승인)</li>
+        <li><b>개발 방식의 확정</b> — 검증 데이터가 답한 대로</li>
+      </ul>
+    </div>
+  </div>
+  <div class="band">오른쪽 문들은 닫힌 것이 아니라 <span class="g">검증이 여는 문</span>입니다 — 그래서 두 달짜리 가벼운 첫 결정이 성립합니다.</div>
+  <div class="sfoot">11 / 14</div>
+</div>
+
+<!-- 12 · 요청드리는 결정 -->
+<div class="slide">
+  <div class="shead"><span>09 · 요청드리는 결정</span><span>바디프랜드 비욘드</span></div>
+  <div class="secno">09 · 요청드리는 결정</div>
+  <h1 class="serif">필요한 결정은 하나 —<br><span class="g">계약 ① 승인</span>입니다.</h1>
+  <div class="cols c2" style="margin-top:8px">
+    <div class="card gold"><h4>계약 ① 승인 — 1.99억 원 · 2개월</h4>
+    <ul>
+      <li><b>산출</b> — 인건비와 AI 중심입니다</li>
+      <li><b>지급</b> — 체결 시 전액 지급입니다</li>
+      <li><b>용도</b> — 전액이 두 달의 실행 비용입니다</li>
+    </ul></div>
+    <div class="card gold"><h4>계약 안에 함께 담는 약속</h4>
+    <ul>
+      <li><b>전용성</b> — 결과물과 노하우는 바디프랜드 외 어디에도 제공하지 않습니다</li>
+      <li><b>고객 정보 보호</b> — 고객 동의와 법령의 범위 안에서, 제공 항목은 검증에 필요한 <b>최소한으로 특정</b>합니다. 접근·보관·반출 통제는 바디프랜드 보안 절차를 따릅니다</li>
+      <li><b>원스톱</b> — 별도 계약 없이 <b>계약 ① 하나로 시작</b>합니다</li>
+    </ul></div>
+  </div>
+  <table style="margin-top:14px">
+    <tr><th style="width:24%">오늘 승인 범위</th><td>계약 ① 하나 — 계약 ②·③, 코인 뒷단, 소사이어티 보증은 검증 결과 위에서 별도 승인</td></tr>
+    <tr><th>7월 승인 시</th><td>동작 버전(α)이 9월 출시 전 도달 — 첫 로그인 고객을 준비된 화면으로 맞이</td></tr>
+  </table>
+  <div class="sfoot">12 / 14</div>
+</div>
+
+<!-- 13 · CLOSING -->
+<div class="slide dark">
+  <div class="shead"><span>Closing</span><span>LICHE · 2026.07</span></div>
+  <div class="center">
+    <div class="hr-gold"></div>
+    <div class="cover-quote">
+      9월, 새 라인업의 첫 고객이 계정을 만듭니다.<br>
+      그 화면 뒤에 멤버십이 준비되어 있도록,<br>
+      리체는 <b style="color:var(--gold-bright)">2026년 7월 착수</b>를 제안드립니다.<br><br>
+      계약 ①을 승인해 주시면 바로 시작하겠습니다.<br>
+      연내 베타는 그 위에서 가능해집니다.
+    </div>
+    <div class="hr-gold"></div>
+    <div class="tagline">LICHE · 바디프랜드 멤버십 메타버스 · 바디프랜드 전용 프로젝트 · 대외비</div>
+  </div>
+  <div class="sfoot">13 / 14</div>
+</div>
+
+
+<!-- 14 · 부록 · 투입 인력 구성 -->
+<div class="slide">
+  <div class="shead"><span>부록 · 투입 인력</span><span>바디프랜드 비욘드</span></div>
+  <div class="secno">부록 — 투입 인력 구성</div>
+  <h1 class="serif">계약 ①의 <span class="g">투입 인력 구성</span>입니다.</h1>
+  <table style="margin-top:10px">
+    <tr><th style="width:22%">직군</th><th>맡는 일</th><th style="width:26%">구성</th></tr>
+    <tr><td><b>총괄 프로듀서</b></td><td>전체 설계 · 우선순위 · 품질 판정 · 바디프랜드 창구</td><td>확정 기입</td></tr>
+    <tr><td><b>시스템 기획</b></td><td>내 몸 리포트 · 코인 루프 · 등급 룰 설계</td><td>확정 기입</td></tr>
+    <tr><td><b>풀스택 개발</b></td><td>앱 · 서버 · 기기 연동 구현</td><td>확정 기입</td></tr>
+    <tr><td><b>데이터 엔지니어링</b></td><td>데이터 실측 · 수집 체계 · KPI 파이프라인</td><td>확정 기입</td></tr>
+    <tr><td><b>혜택 소싱 · 운영</b></td><td>혜택 마스터플랜 · 셀렉트 딜 설계</td><td>확정 기입</td></tr>
+  </table>
+  <p class="footnote" style="margin-top:14px">투입 인력의 상세 명부와 경력 사항은 계약 체결 시 제출합니다.</p>
+  <div class="sfoot">14 / 14</div>
+</div>
+
+</body>
+</html>
