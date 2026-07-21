@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>바디프랜드 비욘드 — 첫 2개월 구현 범위 제안 (2026.07 · v14)</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #241B10; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    #__bundler_loading { position: fixed; bottom: 20px; right: 20px; font: 13px/1.4 -apple-system, BlinkMacSystemFont, sans-serif; color: #666; background: #fff; padding: 8px 14px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.12); z-index: 10000; }
+    #__bundler_thumbnail { position: fixed; inset: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #241B10; z-index: 9999; }
+    #__bundler_thumbnail svg { width: 100%; height: 100%; object-fit: contain; }
+    #__bundler_placeholder { color: #999; font-size: 14px; }
+  </style>
+  <noscript>
+    <style>#__bundler_loading { display: none; }</style>
+    <div style="position:fixed;bottom:12px;left:12px;font:13px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;color:#999;background:rgba(255,255,255,0.9);padding:6px 12px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,0.08);z-index:10000;">
+      This page requires JavaScript to display.
+    </div>
+  </noscript>
+</head>
+<body>
+  <div id="__bundler_thumbnail">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect x="30" y="30" width="1140" height="740" fill="none" stroke="#E9CA80" stroke-width="3" opacity=".5"></rect>
+    <text x="600" y="430" text-anchor="middle" font-family="serif" font-size="120" font-weight="800" fill="#F7EFDD">비욘드</text>
+    <rect x="560" y="490" width="80" height="6" fill="#A9832A"></rect>
+  </svg>
+</div>
+  <div id="__bundler_loading">Unpacking...</div>
+
+  <script>
+    
+document.addEventListener('DOMContentLoaded', async function() {
+  const loading = document.getElementById('__bundler_loading');
+  function setStatus(msg) { if (loading) loading.textContent = msg; }
+
+  const FONT_MIME = /^(font[/]|application[/](x-)?font-|application[/]vnd\.ms-fontobject)/i;
+  const MIME_TOKEN = /^[\w.+-]+[/][\w.+-]+$/;
+  function toBase64(bytes) {
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(bin);
+  }
+
+  // Error sink persists across replaceWith since it's on window, not the DOM.
+  window.addEventListener('error', function(e) {
+    // Failed resource loads (CSP-blocked links, scripts, images) fire plain
+    // events at the element — warn only; real JS errors carry message/error.
+    if (!e.message && !e.error && e.target && e.target !== window) {
+      console.warn('[bundle] resource failed to load:',
+        e.target.tagName, String(e.target.src || e.target.href || ''));
+      return;
+    }
+    var p = document.body || document.documentElement;
+    var d = document.getElementById('__bundler_err') || p.appendChild(document.createElement('div'));
+    d.id = '__bundler_err';
+    d.style.cssText = 'position:fixed;bottom:12px;left:12px;right:12px;font:12px/1.4 ui-monospace,monospace;background:#2a1215;color:#ff8a80;padding:10px 14px;border-radius:8px;border:1px solid #5c2b2e;z-index:99999;white-space:pre-wrap;max-height:40vh;overflow:auto';
+    d.textContent = (d.textContent ? d.textContent + String.fromCharCode(10) : '') +
+      '[bundle] ' + (e.message || e.type) +
+      (e.filename ? ' (' + e.filename.slice(0, 60) + ':' + e.lineno + ')' : '');
+  }, true);
+
+  try {
+    const manifestEl = document.querySelector('script[type="__bundler/manifest"]');
+    const templateEl = document.querySelector('script[type="__bundler/template"]');
+    if (!manifestEl || !templateEl) {
+      setStatus('Error: missing bundle data');
+      console.error('[bundler] Missing script tags — manifestEl:', !!manifestEl, 'templateEl:', !!templateEl);
+      return;
+    }
+
+    const manifest = JSON.parse(manifestEl.textContent);
+    let template = JSON.parse(templateEl.textContent);
+
+    // Nested page bundles (iframe targets). Each ships ONCE, in the ROOT
+    // document's manifest; frame srcs carry an about:blank#<uuid> marker
+    // instead of a substitutable uuid. Every document mints the blobs for
+    // its OWN frames — from local text at the root, or text obtained from
+    // its DIRECT parent over the relay protocol below — so each frame
+    // navigation stays same-origin with its initiator and a deduped page
+    // loads at any depth on any host, including a file:// download's
+    // opaque origins (where a blob minted by one document cannot be
+    // navigated to by another).
+    const pageOrderEl = document.querySelector('script[type="__bundler/page_order"]');
+    const pageOrder = pageOrderEl ? JSON.parse(pageOrderEl.textContent) : [];
+    const pageSet = new Set(pageOrder);
+    const pageTexts = {};
+
+    // ── Nested-page text protocol (parent-chain relay) ──
+    // Page bundles ship once, in the ROOT document's manifest. Every
+    // document mints the blobs for its OWN frames, obtaining page text
+    // through a strict parent-chain relay: a document only ever SENDS to
+    // its direct parent (which, for every document the publisher's own
+    // runtime minted, is another publisher document) and only ACCEPTS
+    // text from that direct parent; requests from below are honored only
+    // for the document's own child frames, and the ROOT never sends
+    // upward at all. That last rule is load-bearing: the artifact host's
+    // frame-ancestors allows claude.ai (and friends) to frame an
+    // artifact, so window.top can be a FOREIGN document — a top-addressed
+    // protocol would hand page uuids to that ancestor and accept forged
+    // "page text" from it, minting attacker HTML as an artifact-origin
+    // blob document. The chain never touches the ancestor: requests stop
+    // at the root, replies are origin-addressed per hop (never '*' when
+    // an origin exists), and both directions are origin-gated (on https
+    // a foreign sender's origin can never equal this document's; in
+    // opaque contexts — file:// — everything serializes as 'null', where
+    // an embedded EXTERNAL frame still fails the gate by carrying its
+    // own real origin, and a sandboxed child of such a frame is excluded
+    // by the own-child-frames check plus uuid unguessability). Shape is
+    // deny-by-default: one request form, one reply form, no error
+    // replies.
+    // window.origin is the SERIALIZED SECURITY origin ('null' in opaque
+    // contexts such as a sandboxed preview iframe) — location.origin is
+    // computed from the URL and stays 'https://…' even when the document
+    // is sandboxed, which would misgate every opaque chain.
+    const OWN_TARGET = /^https?:[/][/]/.test(window.origin || '')
+      ? window.origin
+      : '*';
+    function trustedOrigin(e) {
+      if (e.origin === window.origin) return true; // https chains; opaque==opaque
+      // file:// trees: Chrome serializes the file document's origin as
+      // 'file://' while the blob: documents it mints serialize as 'null',
+      // so the two legitimate shapes can never string-match — accept the
+      // pair in both directions. https origins never serialize as either,
+      // and sender identity (own child frame / direct parent) is checked
+      // separately.
+      return (
+        (e.origin === 'null' &&
+          (window.origin === 'file://' ||
+            window.location.protocol === 'file:')) ||
+        (/^file:/.test(e.origin) && window.origin === 'null')
+      );
+    }
+    // Non-empty only in the root document (nested bundles ship an empty
+    // island), so it doubles as the root marker: the root answers from
+    // local text and treats a miss as authoritative — never relaying to
+    // its (possibly foreign) parent.
+    const isPageRoot = pageOrder.length > 0;
+    const blobUrls = {};
+    const resourceBlobs = {};
+    const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    const pendingFrames = {}; // uuid -> [{el, frag}] awaiting text for own frames
+    const pendingRelays = {}; // uuid -> [childWindow] awaiting text to pass down
+    function mountPage(el, frag, text) {
+      const pageBlob = new Blob([text], { type: 'text/html' });
+      const u = URL.createObjectURL(pageBlob);
+      resourceBlobs[u] = pageBlob;
+      el.src = u + frag;
+    }
+    function deliverPage(uuid, text) {
+      const frames = pendingFrames[uuid];
+      delete pendingFrames[uuid];
+      if (frames) for (const f of frames) mountPage(f.el, f.frag, text);
+      const relays = pendingRelays[uuid];
+      delete pendingRelays[uuid];
+      if (relays) {
+        for (const cw of relays) {
+          try { cw.postMessage({ __bundler_page: uuid, __bundler_text: text }, OWN_TARGET); } catch (err) { /* gone */ }
+        }
+      }
+    }
+    function ownFrameWindows() {
+      const out = [];
+      for (const f of Array.from(document.querySelectorAll('iframe'))) {
+        try { if (f.contentWindow) out.push(f.contentWindow); } catch (err) { /* detached */ }
+      }
+      return out;
+    }
+    window.addEventListener('message', function (e) {
+      const d = e.data;
+      if (!d || typeof d !== 'object' || !e.source) return;
+      // Origin gate first; the structural checks below (own-child-frames
+      // for requests, direct-parent + solicited-uuid for replies, the
+      // root's never-relay rule) are what hold in fully opaque chains
+      // where origin strings can't discriminate — a sandboxed root's
+      // FOREIGN wrapper still fails all three even though both serialize
+      // as real-vs-'null' rather than matching.
+      if (!trustedOrigin(e)) return;
+      if (typeof d.__bundler_need === 'string' && UUID_SHAPE.test(d.__bundler_need)) {
+        // Requests are honored only for this document's own child frames.
+        if (ownFrameWindows().indexOf(e.source) < 0) return;
+        const uuid = d.__bundler_need;
+        const text = pageTexts[uuid];
+        if (typeof text === 'string') {
+          try { e.source.postMessage({ __bundler_page: uuid, __bundler_text: text }, OWN_TARGET); } catch (err) { /* gone */ }
+          return;
+        }
+        if (isPageRoot || window.parent === window) return; // authoritative miss
+        const waiting = pendingRelays[uuid];
+        if (waiting) {
+          if (waiting.indexOf(e.source) < 0) waiting.push(e.source);
+          return;
+        }
+        // Never-answered uuids would otherwise accumulate forever under a
+        // request spray; past the cap (far above any real page count) new
+        // relays are dropped rather than remembered.
+        if (Object.keys(pendingRelays).length >= 128) return;
+        pendingRelays[uuid] = [e.source];
+        window.parent.postMessage({ __bundler_need: uuid }, OWN_TARGET);
+      } else if (
+        typeof d.__bundler_page === 'string' &&
+        UUID_SHAPE.test(d.__bundler_page) &&
+        typeof d.__bundler_text === 'string'
+      ) {
+        // The shape test is load-bearing beyond tidiness: the solicited
+        // check below uses the in operator, which matches prototype keys
+        // ('__proto__', 'constructor') — an unshaped key would reach
+        // deliverPage and throw, painting the error banner.
+        // Text is accepted only from the direct parent — the document
+        // that minted this one.
+        if (e.source !== window.parent || window.parent === window) return;
+        if (!(d.__bundler_page in pendingFrames) && !(d.__bundler_page in pendingRelays)) return;
+        deliverPage(d.__bundler_page, d.__bundler_text);
+      }
+    });
+
+    const uuids = Object.keys(manifest);
+    setStatus('Unpacking ' + uuids.length + ' assets...');
+
+    await Promise.all(uuids.map(async (uuid) => {
+      const entry = manifest[uuid];
+      try {
+        const binaryStr = atob(entry.data);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+
+        let finalBytes = bytes;
+        if (entry.compressed) {
+          if (typeof DecompressionStream !== 'undefined') {
+            const ds = new DecompressionStream('gzip');
+            const writer = ds.writable.getWriter();
+            const reader = ds.readable.getReader();
+            writer.write(bytes);
+            writer.close();
+            const chunks = [];
+            let totalLen = 0;
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              chunks.push(value);
+              totalLen += value.length;
+            }
+            finalBytes = new Uint8Array(totalLen);
+            let offset = 0;
+            for (const chunk of chunks) { finalBytes.set(chunk, offset); offset += chunk.length; }
+          } else {
+            console.warn('DecompressionStream not available, asset ' + uuid + ' may not render');
+          }
+        }
+
+        if (pageSet.has(uuid)) {
+          pageTexts[uuid] = new TextDecoder().decode(finalBytes);
+          return;
+        }
+        if (FONT_MIME.test(entry.mime) && MIME_TOKEN.test(entry.mime)) {
+          // Strict artifact hosts allow font-src data: but not blob:.
+          blobUrls[uuid] = 'data:' + entry.mime + ';base64,' +
+            (entry.compressed ? toBase64(finalBytes) : entry.data);
+        } else {
+          const blob = new Blob([finalBytes], { type: entry.mime });
+          blobUrls[uuid] = URL.createObjectURL(blob);
+          resourceBlobs[blobUrls[uuid]] = blob;
+        }
+      } catch (err) {
+        console.error('Failed to decode asset ' + uuid + ':', err);
+        const blob = new Blob([], { type: entry.mime });
+        blobUrls[uuid] = URL.createObjectURL(blob);
+        resourceBlobs[blobUrls[uuid]] = blob;
+      }
+    }));
+
+    const extResEl = document.querySelector('script[type="__bundler/ext_resources"]');
+    const extResources = extResEl ? JSON.parse(extResEl.textContent) : [];
+    const resourceMap = {};
+    for (const entry of extResources) {
+      if (blobUrls[entry.uuid]) resourceMap[entry.id] = blobUrls[entry.uuid];
+    }
+
+    // Artifact-host CSP (connect-src 'self') refuses fetch() of blob: URLs —
+    // consumers read these Blobs directly. Survives the swap like the error sink.
+    window.__resourceBlobs = resourceBlobs;
+
+    setStatus('Rendering...');
+    // Page uuids have no blob here — they ride inside about:blank#<uuid>
+    // frame markers the pass below resolves after the swap.
+    for (const uuid of uuids) {
+      if (pageSet.has(uuid)) continue;
+      template = template.split(uuid).join(blobUrls[uuid]);
+    }
+
+    // Strip integrity + crossorigin — blob URLs from a file:// document inherit
+    // a null origin, so crossorigin forces a CORS fetch that SRI then rejects.
+    // The manifest bytes are ours; SRI protects against CDN compromise, not this.
+    template = template.replace(/\s+integrity="[^"]*"/gi, '').replace(/\s+crossorigin="[^"]*"/gi, '');
+
+    const resourceScript = '<script>window.__resources = ' +
+      JSON.stringify(resourceMap).replace(/<\//g, '<\\/') +
+      ';</' + 'script>';
+    // Inject after <head> so the DOCTYPE stays first; prepending the script
+    // would push the parser into quirks mode. DOMParser always emits a <head>
+    // (synthesizing one if the source HTML omitted it) but may carry
+    // attributes through, so match the full opening tag. slice() rather than
+    // replace() keeps us clear of $-pattern substitution in resourceScript.
+    const headOpen = template.match(/<head[^>]*>/i);
+    if (headOpen) {
+      const i = headOpen.index + headOpen[0].length;
+      template = template.slice(0, i) + resourceScript + template.slice(i);
+    }
+
+    // Parse the template and swap the root element. Scripts inserted via
+    // DOMParser/replaceWith are inert per spec — re-create each with
+    // createElement so they execute, awaiting onload for src scripts to
+    // preserve ordering (React before ReactDOM before Babel before text/babel).
+    const doc = new DOMParser().parseFromString(template, 'text/html');
+    document.documentElement.replaceWith(doc.documentElement);
+
+    // Resolve page-frame markers: mint this document's own blob for each
+    // framed page — from local text when this is the root, otherwise by
+    // asking the direct parent over the relay protocol above. An
+    // unanswered request leaves the frame on about:blank, the same
+    // degraded state as a refused embed.
+    {
+      const MARKER = /^about:blank#([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(#.*)?$/;
+      const needed = [];
+      for (const el of Array.from(document.querySelectorAll('iframe'))) {
+        const m = MARKER.exec(el.getAttribute('src') || '');
+        if (!m) continue;
+        const text = pageTexts[m[1]];
+        if (typeof text === 'string') {
+          mountPage(el, m[2] || '', text);
+        } else if (window.parent !== window && !isPageRoot) {
+          const had = pendingFrames[m[1]];
+          (pendingFrames[m[1]] = had || []).push({ el: el, frag: m[2] || '' });
+          if (!had) needed.push(m[1]);
+        }
+      }
+      for (const uuid of needed) {
+        window.parent.postMessage({ __bundler_need: uuid }, OWN_TARGET);
+      }
+    }
+
+    const dead = Array.from(document.scripts);
+    for (const old of dead) {
+      const s = document.createElement('script');
+      for (const a of old.attributes) s.setAttribute(a.name, a.value);
+      s.textContent = old.textContent;
+      // text/babel scripts with a src: read and inline. transformScriptTags
+      // does XHR against the src, but blob:null/ from a file:// origin is
+      // silently dropped. Inlining makes it a plain inline babel script,
+      // which transformScriptTags handles unconditionally.
+      if ((s.type === 'text/babel' || s.type === 'text/jsx') && s.src) {
+        const pre = resourceBlobs[s.src.split('#')[0]];
+        s.textContent = pre ? await pre.text() : await (await fetch(s.src)).text();
+        s.removeAttribute('src');
+      }
+      const p = s.src ? new Promise(function(r) { s.onload = s.onerror = r; }) : null;
+      old.replaceWith(s);
+      if (p) await p;
+    }
+    // Babel standalone auto-transforms type=text/babel on DOMContentLoaded,
+    // which fired before we swapped the document. Trigger manually if present.
+    if (window.Babel && typeof window.Babel.transformScriptTags === 'function') {
+      window.Babel.transformScriptTags();
+    }
+  } catch (err) {
+    setStatus('Error unpacking: ' + err.message);
+    console.error('Bundle unpack error:', err);
+  }
+});
+
+  </script>
+
+  <script type="__bundler/manifest">
+{}
+  </script>
+
+  <script type="__bundler/ext_resources">
+[]
+  </script>
+
+  <script type="__bundler/page_order">
+[]
+  </script>
+
+  <script type="__bundler/template">
+"<!DOCTYPE html>\n<html lang=\"ko\"><head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<title>바디프랜드 비욘드 — 첫 2개월 구현 범위 제안 (2026.07 · v14)<\u002Ftitle>\n<style>\n  html{word-break:keep-all;overflow-wrap:break-word}\n  h1,h2,h3{text-wrap:balance}\n  p,li,td,th{text-wrap:pretty}\n  *{box-sizing:border-box;margin:0;padding:0}\n  :root{\n    --ink:#2B2115; --ink-soft:#4A3C2B; --paper:#FBF7EC; --cream2:#F2EAD6;\n    --gold:#A9832A; --gold-soft:#C7AD6F; --gold-bright:#E9CA80;\n    --dark:#241B10; --dark2:#2E2417; --line:rgba(43,33,21,.16);\n    --gA:#6E7F6A; --gB:#A9832A; --gC:#9A6244;\n  }\n  body{background:#D9CFB8;font-family:'Pretendard Variable',Pretendard,'Noto Sans KR',-apple-system,'Segoe UI',sans-serif;color:var(--ink);line-height:1.62}\n  .serif{font-family:'Noto Serif KR','Nanum Myeongjo',serif}\n  .slide{width:1280px;height:720px;margin:18px auto;background:var(--paper);position:relative;box-shadow:0 3px 18px rgba(0,0,0,.16);padding:54px 64px 46px;display:flex;flex-direction:column;overflow:hidden}\n  .slide.dark{background:var(--dark);color:#F3EADB}\n  .slide.dark::before{content:\"\";position:absolute;inset:16px;border:1px solid rgba(233,202,128,.32);pointer-events:none}\n  .slide.dark::after{content:\"\";position:absolute;inset:22px;border:1px solid rgba(233,202,128,.11);pointer-events:none}\n  .shead{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.2em;font-weight:700;color:#9A8A72;text-transform:uppercase;margin-bottom:22px}\n  .slide.dark .shead{color:#8F7C5E}\n  .sfoot{position:absolute;bottom:22px;right:64px;font-size:11px;font-weight:800;color:var(--gold)}\n  .secno{font-size:11px;letter-spacing:.22em;font-weight:800;color:var(--gold);margin-bottom:10px;display:flex;align-items:center;gap:10px}\n  .secno::before{content:\"\";width:26px;height:1px;background:var(--gold)}\n  h1{font-size:31px;font-weight:800;letter-spacing:-.02em;line-height:1.4;margin-bottom:10px}\n  .slide.dark h1{color:#F7EFDD}\n  h1 .g{color:var(--gold)}\n  .slide.dark h1 .g{color:var(--gold-bright)}\n  .lead{font-size:15.5px;color:var(--ink-soft);margin-bottom:18px;max-width:1010px}\n  .slide.dark .lead{color:#CBBBA0}\n  p{font-size:14.5px;color:var(--ink-soft)}\n  b{color:var(--ink);font-weight:800}\n  .slide.dark p b{color:#F3EADB}\n  .cols{display:grid;gap:14px;flex:1;align-content:start}\n  .c2{grid-template-columns:1fr 1fr}\n  .c3{grid-template-columns:1fr 1fr 1fr}\n  .card{background:#FFFDF6;border:1px solid var(--line);border-radius:5px;padding:18px 20px}\n  .card.gold{background:#F6EFDC;border-color:rgba(169,131,42,.45)}\n  .card.dark2{background:var(--dark2);border:1px solid rgba(233,202,128,.3);color:#F3EADB}\n  .card.dark2 h4{color:#F7EFDD}\n  .card.dark2 p,.card.dark2 li{color:#CBBBA0}\n  .card.dark2 b{color:var(--gold-bright)}\n  .card.dark2 li::before{background:rgba(233,202,128,.55)}\n  .card h4{font-size:15.5px;font-weight:800;margin-bottom:7px;color:var(--ink)}\n  .card p{font-size:13.8px}\n  .num{display:inline-flex;align-items:center;justify-content:center;min-width:23px;height:23px;border-radius:50%;background:var(--gold);color:#FFFDF6;font-size:12px;font-weight:800;margin-right:8px;vertical-align:-4px}\n  ul{list-style:none}\n  li{position:relative;padding-left:15px;margin:6px 0;font-size:13.6px;color:var(--ink-soft)}\n  li::before{content:\"\";position:absolute;left:0;top:9px;width:5px;height:5px;border-radius:50%;background:var(--gold-soft)}\n  table{width:100%;border-collapse:collapse;font-size:13.8px}\n  th{background:#EAE0C6;font-weight:800;text-align:left;padding:9px 12px;border-bottom:1px solid rgba(43,33,21,.25);font-size:11.5px}\n  td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-soft)}\n  .band{background:var(--dark2);color:#F3E9D4;border-left:3px solid var(--gold);padding:13px 20px;border-radius:0 6px 6px 0;font-size:15px;font-weight:700;line-height:1.7;margin-top:auto}\n  .band .g{color:var(--gold-bright)}\n  .slide.dark .band{background:rgba(233,202,128,.08)}\n  .tag{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.04em;padding:2px 10px;border-radius:999px;margin-left:6px;vertical-align:2px}\n  .tag.live{background:#E4EFE6;color:#3E5A4C}\n  .tag.sample{background:#EDE1C8;color:#7A6335}\n  .tag.visual{background:#F4E3DC;color:#8A4A2E}\n  .hr-gold{width:44px;height:2px;background:var(--gold);margin:26px auto}\n  .center{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;flex:1}\n  .cover-title{font-size:56px;font-weight:800;color:#F7EFDD;letter-spacing:.01em;margin:12px 0 6px;font-family:'Noto Serif KR',serif}\n  .cover-sub{font-size:19px;color:var(--gold-bright);font-weight:700;margin-bottom:26px}\n  .cover-quote{font-size:16px;color:#D8C8A8;line-height:1.95;max-width:840px}\n  .cover-quote b{color:#F7EFDD}\n  .kicker{font-size:12px;letter-spacing:.26em;font-weight:800;color:var(--gold-bright);text-transform:uppercase}\n  .tagline{font-size:11.5px;letter-spacing:.14em;color:#B7A280}\n  .footnote{font-size:11.5px;color:#9A8A72;margin-top:8px}\n  .docstrip{margin-top:auto;padding-top:12px;border-top:1px solid var(--line);font-size:11.5px;color:#9A8A72;letter-spacing:.02em}\n  /* Gantt */\n  .gantt{margin-top:8px}\n  .ghead,.grow{display:grid;grid-template-columns:150px 1fr;gap:14px;align-items:center}\n  .ghead{margin-bottom:8px}\n  .grow{margin-bottom:9px}\n  .wkhead{display:grid;grid-template-columns:repeat(8,1fr);gap:5px}\n  .wkhead span{text-align:center;font-size:10.5px;font-weight:800;color:#9A8A72}\n  .glabel{font-size:13px;font-weight:800;color:var(--ink)}\n  .glane{display:grid;grid-template-columns:repeat(8,1fr);gap:5px}\n  .glane .cell{height:32px;background:#ECE3CE;border-radius:4px;grid-row:1}\n  .glane .bar{grid-row:1;border-radius:4px;display:flex;align-items:center;padding:0 12px;color:#FFFDF6;font-size:11.8px;font-weight:800;box-shadow:inset 0 -2px 0 rgba(0,0,0,.14)}\n  .bar.a{background:var(--gA)} .bar.b{background:var(--gB)} .bar.c{background:var(--gC)}\n  /* Weekly cadence */\n  .wkline{display:grid;grid-template-columns:repeat(8,1fr);gap:7px;margin-top:40px;margin-bottom:6px}\n  .wkbox{position:relative;height:46px;background:#ECE3CE;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#9A8A72}\n  .wkbox.rep{background:#F4ECD6;box-shadow:inset 0 0 0 1.6px var(--gold-soft)}\n  .wkbox.hot{background:#F6EFDC;box-shadow:inset 0 0 0 2px var(--gold)}\n  .wkbox .rp{position:absolute;bottom:-19px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10px;font-weight:800;color:var(--gold);letter-spacing:.02em}\n  .wkbox .chip{position:absolute;top:-31px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:11px;font-weight:800;padding:4px 11px;border-radius:999px;background:var(--dark2);color:#F3E9D4}\n  .wkbox .chip::after{content:\"\";position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--dark2);border-bottom:0}\n  .wkbox .chip.hot{background:var(--gold);color:#FFFDF6}\n  .wkbox .chip.hot::after{border-top-color:var(--gold)}\n  /* flow arrows */\n  .flow3{display:grid;grid-template-columns:1fr 34px 1fr 34px 1fr;gap:0;align-items:stretch}\n  .flow3 .arrow{display:flex;align-items:center;justify-content:center;color:var(--gold);font-size:20px;font-weight:800}\n  .price-line{display:flex;align-items:baseline;gap:12px;margin:6px 0 4px;flex-wrap:nowrap}\n  .price-line .big{font-size:25px;font-weight:800;color:var(--ink);font-family:'Noto Serif KR',serif;white-space:nowrap}\n  .price-line .ctx{font-size:12.3px;color:#8F7F68;font-weight:700;flex:1;min-width:0}\n  .facts li{font-size:13.2px}\n  /* Phone mockups */\n  .phones{display:flex;gap:16px;justify-content:center;margin-top:6px}\n  .phwrap{display:flex;flex-direction:column;align-items:center;width:212px}\n  .ph{width:100%;background:#241B10;border-radius:24px;padding:15px 8px 13px;box-shadow:0 14px 28px rgba(36,27,16,.24),0 3px 8px rgba(36,27,16,.16);position:relative;border:1px solid rgba(233,202,128,.14)}\n  .ph::before{content:\"\";position:absolute;top:6px;left:50%;transform:translateX(-50%);width:34px;height:4px;border-radius:2px;background:rgba(243,234,219,.2)}\n  .ph::after{content:\"\";position:absolute;bottom:5px;left:50%;transform:translateX(-50%);width:44px;height:3px;border-radius:2px;background:rgba(243,234,219,.16)}\n  .scr{background:linear-gradient(180deg,#FDFAF2,#FAF5E8);border-radius:16px;height:296px;padding:13px 12px;position:relative;overflow:hidden;display:flex;flex-direction:column;gap:8px}\n  .scr .top{display:flex;justify-content:space-between;align-items:center}\n  .scr .logo{font-size:8.5px;font-weight:800;letter-spacing:.12em;color:#A9832A}\n  .scr .coin{font-size:9px;font-weight:800;color:#7A6335;background:#F2E7CC;border-radius:999px;padding:2px 8px}\n  .scr .htxt{font-size:12.5px;font-weight:800;color:#2B2115;line-height:1.4}\n  .scr .stxt{font-size:9.5px;color:#8F7F68;line-height:1.5}\n  .wcard{background:#fff;border:1px solid rgba(43,33,21,.12);border-radius:9px;padding:9px 10px}\n  .wl{height:6px;border-radius:3px;background:#E8DEC6}\n  .wl.g{background:#C7AD6F}\n  .chart{display:flex;align-items:flex-end;gap:5px;height:56px;padding-top:4px}\n  .chart i{flex:1;background:linear-gradient(180deg,#C7AD6F,#A9832A);border-radius:3px 3px 0 0;display:block}\n  .ring{width:84px;height:84px;border-radius:50%;background:conic-gradient(var(--gold) 0 65%, #EAE0C6 65% 100%);display:flex;align-items:center;justify-content:center;margin:2px auto}\n  .ring i{width:62px;height:62px;border-radius:50%;background:#FBF7EC;display:flex;flex-direction:column;align-items:center;justify-content:center;font-style:normal;font-size:9px;color:#8F7F68;font-weight:700}\n  .ring i b{font-size:13px;color:#2B2115}\n  .toast{background:var(--dark2);color:#F3E9D4;border-radius:9px;padding:8px 10px;font-size:10px;font-weight:800;display:flex;align-items:center;gap:7px}\n  .toast .c{display:inline-flex;width:16px;height:16px;border-radius:50%;background:var(--gold-bright);color:#241B10;font-size:9px;font-weight:800;align-items:center;justify-content:center}\n  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:7px}\n  .prod{background:#fff;border:1px solid rgba(43,33,21,.12);border-radius:8px;height:56px;position:relative;overflow:hidden}\n  .prod::before{content:\"\";position:absolute;inset:8px 8px 22px;background:#EFE6D0;border-radius:5px}\n  .prod::after{content:\"\";position:absolute;left:8px;bottom:8px;width:60%;height:6px;background:#E0D5BB;border-radius:3px}\n  .lock{position:absolute;inset:0;background:rgba(251,247,236,.55);backdrop-filter:blur(1.5px);display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:800;color:#7A6335}\n  .avrow{display:flex;align-items:center;gap:6px}\n  .av{width:24px;height:24px;border-radius:50%;background:#E4D6B4;border:2px solid #fff;box-shadow:0 0 0 1px rgba(43,33,21,.12)}\n  .av.g{background:var(--gold-soft)}\n  .phcap{margin-top:10px;text-align:center}\n  .phcap .t{font-size:12.5px;font-weight:800;color:var(--ink)}\n  .phstep{display:flex;align-items:center;color:var(--gold);font-size:16px;font-weight:800;padding-top:130px}\n  /* ── v11 visual components ── */\n  .tl9{display:flex;align-items:center;margin:0 0 16px}\n  .tl9 .node{background:var(--dark2);color:#F3E9D4;font-size:12.5px;font-weight:800;padding:9px 18px;border-radius:999px;white-space:nowrap;z-index:1;box-shadow:0 3px 8px rgba(36,27,16,.16)}\n  .tl9 .node.hot{background:var(--gold);color:#FFFDF6}\n  .tl9 .seg{flex:1;height:7px;background:linear-gradient(90deg,var(--gold-soft),var(--gold));position:relative;margin:0 -4px}\n  .tl9 .seg span{position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:10.5px;font-weight:800;color:#8F7F68;letter-spacing:.04em;white-space:nowrap}\n  .dlv{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;flex:1;align-content:start}\n  .dlv .item{display:flex;flex-direction:column;align-items:center;text-align:center}\n  .stage{height:196px;display:flex;align-items:center;justify-content:center;width:100%;background:#F2EAD6;border:1px solid var(--line);border-radius:8px;position:relative;overflow:hidden}\n  .miniph{width:96px;background:#241B10;border-radius:15px;padding:9px 5px 8px;box-shadow:0 9px 18px rgba(36,27,16,.22),0 2px 5px rgba(36,27,16,.14);position:relative;border:1px solid rgba(233,202,128,.12)}\n  .miniph::before{content:\"\";position:absolute;top:4px;left:50%;transform:translateX(-50%);width:22px;height:3px;border-radius:2px;background:rgba(243,234,219,.2)}\n  .miniph .ms{background:#FBF7EC;border-radius:9px;height:158px;padding:9px 8px;display:flex;flex-direction:column;gap:5px}\n  .miniph .mlogo{font-size:6.5px;font-weight:800;letter-spacing:.1em;color:#A9832A}\n  .miniph .mh{font-size:9px;font-weight:800;color:#2B2115;line-height:1.35}\n  .miniph .mchart{display:flex;align-items:flex-end;gap:3px;height:34px}\n  .miniph .mchart i{flex:1;background:linear-gradient(180deg,#C7AD6F,#A9832A);border-radius:2px 2px 0 0}\n  .miniph .mtoast{background:var(--dark2);color:#F3E9D4;border-radius:6px;padding:4px 6px;font-size:6.5px;font-weight:800}\n  .doc{width:122px;height:156px;background:#fff;border:1px solid rgba(43,33,21,.18);border-radius:6px;box-shadow:0 4px 10px rgba(36,27,16,.14);padding:12px 11px}\n  .doc .dtit{font-size:8px;font-weight:800;letter-spacing:.08em;color:#A9832A;margin-bottom:7px}\n  .doc .dl{height:5px;border-radius:3px;background:#E8DEC6;margin:6px 0}\n  .doc .dl.g{background:#C7AD6F}\n  .doc .dchart{display:flex;align-items:flex-end;gap:3px;height:44px;margin-top:9px}\n  .doc .dchart i{flex:1;background:linear-gradient(180deg,#C7AD6F,#A9832A);border-radius:2px 2px 0 0}\n  .doc .dnum{font-size:13px;font-weight:800;color:#2B2115;font-family:'Noto Serif KR',serif;margin-top:6px}\n  .dstack{position:relative;width:150px;height:164px}\n  .dstack .doc{position:absolute;left:6px;top:0}\n  .dstack .doc.b1{transform:rotate(-5deg);top:8px;left:0}\n  .dstack .doc.b2{transform:rotate(3deg);top:4px;left:14px}\n  .dlv h4{margin-top:13px;font-size:15px;font-weight:800;color:var(--ink)}\n  .dlv p{font-size:12.6px;margin-top:4px;color:var(--ink-soft)}\n  .orbitwrap{display:flex;gap:34px;align-items:center;flex:1}\n  .orbit{position:relative;width:340px;height:340px;flex:0 0 auto}\n  .orbit .oring{position:absolute;border-radius:50%;left:50%;top:50%;transform:translate(-50%,-50%)}\n  .orbit .r3{width:340px;height:340px;border:1.5px dashed rgba(169,131,42,.42);background:rgba(233,202,128,.07)}\n  .orbit .r2{width:222px;height:222px;border:1.5px solid rgba(169,131,42,.6);background:rgba(233,202,128,.16)}\n  .orbit .r1{width:116px;height:116px;background:radial-gradient(circle at 35% 28%,#C2A050,var(--gold) 72%);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#FFFDF6;box-shadow:0 6px 16px rgba(169,131,42,.35)}\n  .orbit .r1 b{font-size:17px;font-family:'Noto Serif KR',serif;color:#FFFDF6}\n  .orbit .r1 span{font-size:9.5px;font-weight:800;letter-spacing:.04em}\n  .orbit .olab{position:absolute;left:50%;transform:translateX(-50%);background:#FFFDF6;border:1px solid rgba(169,131,42,.45);border-radius:999px;padding:3px 12px;font-size:10.5px;font-weight:800;color:#7A6335;white-space:nowrap;box-shadow:0 2px 6px rgba(36,27,16,.1)}\n  .orbit .olab.l2{bottom:64px}\n  .orbit .olab.l3{bottom:-4px}\n  .fly{position:relative;width:250px;height:250px;flex:0 0 auto}\n  .fly .fring{position:absolute;inset:26px;border:2.5px dashed rgba(169,131,42,.5);border-radius:50%}\n  .fly .fa{position:absolute;color:var(--gold);font-size:17px;font-weight:800;width:18px;height:18px;line-height:18px;text-align:center}\n  .fly .fn{position:absolute;background:#FFFDF6;border:1.5px solid rgba(169,131,42,.55);border-radius:999px;padding:6px 12px;font-size:11px;font-weight:800;color:var(--ink);white-space:nowrap;box-shadow:0 3px 9px rgba(36,27,16,.12)}\n  .fly .fn.gold{background:var(--gold);color:#FFFDF6;border-color:var(--gold)}\n  .fly .fc{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;font-size:12px;font-weight:800;color:var(--gold);line-height:1.5}\n  .cb .row{display:grid;grid-template-columns:112px 1fr 168px;gap:10px;align-items:center;margin:9px 0}\n  .cb .lab{font-size:12.5px;font-weight:800;color:var(--ink)}\n  .cb .track{height:15px;background:#ECE3CE;border-radius:8px;position:relative;overflow:hidden}\n  .cb .fill{position:absolute;left:0;top:0;bottom:0;border-radius:8px;background:linear-gradient(90deg,#C7AD6F,#A9832A)}\n  .cb .val{font-size:12.3px;font-weight:800;color:var(--ink)}\n  .gauge{margin-top:10px}\n  .gauge .gtrack{height:13px;background:#ECE3CE;border-radius:7px;position:relative}\n  .gauge .gband{position:absolute;top:0;bottom:0;left:20%;width:40%;background:rgba(169,131,42,.18);border-left:1px dashed var(--gold);border-right:1px dashed var(--gold)}\n  .gauge .gfill{position:absolute;top:0;bottom:0;left:0;width:32%;border-radius:7px;background:linear-gradient(90deg,#C7AD6F,#A9832A)}\n  .gauge .gcap{display:flex;justify-content:space-between;font-size:10px;font-weight:800;color:#8F7F68;margin-top:4px}\n  .door{width:22px;height:32px;border:1.6px solid var(--gold);border-bottom:none;border-radius:10px 10px 0 0;position:relative;margin-bottom:9px}\n  .door::after{content:\"\";position:absolute;left:-6px;right:-6px;bottom:-1px;height:1.6px;background:var(--gold)}\n  .door.open::before{content:\"\";position:absolute;inset:-1px;background:linear-gradient(160deg,#C2A050,var(--gold));border-radius:10px 10px 0 0;transform-origin:left center;transform:perspective(70px) rotateY(42deg);box-shadow:4px 0 9px rgba(169,131,42,.32)}\n  .door.closed{border-color:var(--gold-soft)}\n  .door.closed::after{background:var(--gold-soft)}\n  .door.closed::before{content:\"\";position:absolute;right:4px;top:15px;width:3px;height:3px;border-radius:50%;background:var(--gold-soft)}\n  .rel{display:flex;align-items:center;gap:13px;margin:2px 0 14px}\n  .rel .rbox{background:#F6EFDC;border:1px solid rgba(169,131,42,.45);border-radius:8px;padding:9px 18px;font-size:13px;font-weight:800;color:var(--ink)}\n  .rel .rbox span{display:block;font-size:10.5px;font-weight:700;color:#8F7F68;margin-top:1px}\n  .rel .rarr{color:var(--gold);font-weight:800;font-size:18px}\n  @media print{\n    body{background:#fff}\n    .slide{margin:0;box-shadow:none;page-break-after:always}\n    @page{size:1280px 720px;margin:0}\n  }\n<\u002Fstyle>\n<\u002Fhead>\n<body>\n\n\n<!-- 1 · COVER -->\n<div class=\"slide dark\">\n  <div class=\"shead\"><span>Confidential · 바디프랜드 귀중<\u002Fspan><span>LICHE · 2026.07<\u002Fspan><\u002Fdiv>\n  <div class=\"center\">\n    <div class=\"kicker\">Bodyfriend Beyond · Membership Metaverse<\u002Fdiv>\n    <div style=\"font-size:14px;color:#C7AD6F;font-weight:700;letter-spacing:.12em;margin-top:14px\">바디프랜드 멤버십 메타버스<\u002Fdiv>\n    <div class=\"cover-title\">바디프랜드 비욘드<\u002Fdiv>\n    <div class=\"cover-sub\">첫 2개월 — 계약 ① 구현 범위 제안<\u002Fdiv>\n    <div class=\"hr-gold\"><\u002Fdiv>\n    <div class=\"cover-quote\">\n      <b style=\"color:var(--gold-bright);font-size:17.5px\">9월, 새 라인업과 함께 계정 기반의 고객 경험이 시작됩니다.<\u002Fb><br>\n      이 문서는 그 첫 고객을 맞을 <b>멤버십 앱을 두 달 안에 준비<\u002Fb>하는 계획입니다.\n    <\u002Fdiv>\n    <div class=\"hr-gold\"><\u002Fdiv>\n    <div class=\"tagline\">제안 리체 · 바디프랜드 전용 프로젝트 · 대외비<\u002Fdiv>\n    <div class=\"tagline\" style=\"margin-top:10px;font-size:10px;letter-spacing:.06em;color:#8F7C5E\">본 문서에 언급된 출시 일정·제품 관련 내용은 협의 과정에서 논의된 계획을 기준으로 하며, 공식 확정에 따릅니다.<\u002Fdiv>\n  <\u002Fdiv>\n<\u002Fdiv>\n\n<!-- 2 · 왜 지금 — 9월 -->\n<div class=\"slide\">\n  <div class=\"shead\"><span>01 · 왜 지금인가<\u002Fspan><span>바디프랜드 비욘드<\u002Fspan><\u002Fdiv>\n  <div class=\"secno\">01 · 왜 지금인가 — 9월이 정해 준 일정<\u002Fdiv>\n  <h1 class=\"serif\">9월,<br>기기 사용이 <span class=\"g\">계정과 결합<\u002Fspan>되기 시작합니다.<\u002Fh1>\n  <p class=\"lead\">9월, AI 프로 라인업(다빈치·퀀텀·733)의 출시와 함께 마사지맵 자동 생성 기능이 도입됩니다.<br>이 기능은 계정 로그인 위에서 동작하므로 — 고객 계정과 결합된 사용 이력 데이터의 수집이 이때부터 본격화됩니다.<\u002Fp>\n  <div class=\"tl9\" style=\"margin-top:24px\">\n    <div class=\"node hot\">2026년 7월 — 계약 ① 착수<\u002Fdiv>\n    <div class=\"seg\" style=\"flex:2\"><span>8주 — 검증 · 구현 · 설계<\u002Fspan><\u002Fdiv>\n    <div class=\"node\">9월 — AI 프로 출시 · 첫 로그인<\u002Fdiv>\n    <div class=\"seg\" style=\"flex:3;background:#E4D8BC\"><span>계정 결합 데이터가 쌓이는 기간<\u002Fspan><\u002Fdiv>\n    <div class=\"node\" style=\"background:#EAE0C6;color:#7A6335\">12월 — 기존 AI 제품까지 확대 · 베타<\u002Fdiv>\n  <\u002Fdiv>\n  <div class=\"cols c3\">\n    <div class=\"card\"><h4><span class=\"num\">1<\u002Fspan>AI 프로 출시<\u002Fh4><p>생성형 AI가 맞춤 마사지맵을 만들어 주는 새 라인업 — <b>데이터 전략의 전환점이 될 시점<\u002Fb>입니다.<\u002Fp><\u002Fdiv>\n    <div class=\"card\"><h4><span class=\"num\">2<\u002Fspan>계정 결합의 시작<\u002Fh4><p>마사지맵을 쓰려면 계정이 필요합니다. <b>고객 정보와 묶인 기기 사용 데이터<\u002Fb>가 이 순간부터 쌓입니다.<\u002Fp><\u002Fdiv>\n    <div class=\"card gold\"><h4><span class=\"num\">3<\u002Fspan>첫인상은 한 번입니다<\u002Fh4><p>천만 원대 기기를 들인 고객이 처음 여는 화면 — 거기에 <b>리포트·코인·혜택이 바로 보여야<\u002Fb> 로그인이 습관이 됩니다. 그 화면을 준비하는 것이 계약 ①입니다.<\u002Fp><\u002Fdiv>\n  <\u002Fdiv>\n  <div class=\"band\">계정이 만들어지는 달에, 계정에 담길 이유가 함께 있어야 합니다 — <span class=\"g\">준비 시한은 2026년 7월 착수<\u002Fspan>입니다.<\u002Fdiv>\n  <div class=\"docstrip\">비욘드의 전체 구상(세계관·4개 층·등급·코인 3단계)은 7월 16일 발표로 갈음합니다 · 이 문서는 계약 ①(2개월)의 실행 범위만 다룹니다<\u002Fdiv>\n  <div class=\"sfoot\">02 / 13<\u002Fdiv>\n<\u002Fdiv>\n\n<!-- 3 · 첫 로그인의 장면 (목업) -->\n<div class=\"slide\">\n  <div class=\"shead\"><span>02 · 첫 로그인의 장면<\u002Fspan><span>바디프랜드 비욘드<\u002Fspan><\u002Fdiv>\n  <div class=\"secno\">02 · 첫 로그인의 장면 — 9월, 고객이 만나는 화면<\u002Fdiv>\n  <h1 class=\"serif\">첫 3분 — 고객은 <span class=\"g\">이런 화면<\u002Fspan>을 만납니다.<\u002Fh1>\n  <div class=\"phones\">\n    <div class=\"phwrap\">\n      <div class=\"ph\"><div class=\"scr\">\n        <div class=\"top\"><span class=\"logo\">BODYFRIEND BEYOND<\u002Fspan><\u002Fdiv>\n        <div class=\"htxt\">반갑습니다,<br>멤버가 되셨습니다<\u002Fdiv>\n        <div class=\"stxt\">기기 등록이 확인되었습니다.<br>당신의 멤버십이 열립니다.<\u002Fdiv>\n        <div class=\"wcard\"><div class=\"wl g\" style=\"width:70%\"><\u002Fdiv><div class=\"wl\" style=\"width:45%;margin-top:6px\"><\u002Fdiv><\u002Fdiv>\n        <div class=\"toast\"><span class=\"c\">W<\u002Fspan>웰컴 코인이 도착했습니다<\u002Fdiv>\n      <\u002Fdiv><\u002Fdiv>\n      <div class=\"phcap\"><div class=\"t\">온보딩 <span class=\"tag sample\">샘플<\u002Fspan><\u002Fdiv><\u002Fdiv>\n    <\u002Fdiv>\n    <div class=\"phwrap\">\n      <div class=\"ph\"><div class=\"scr\">\n        <div class=\"top\"><span class=\"logo\">내 몸 리포트<\u002Fspan><span class=\"coin\">주간<\u002Fspan><\u002Fdiv>\n        <div class=\"htxt\">지난주의 나<\u002Fdiv>\n        <div class=\"chart\"><i style=\"height:34%\"><\u002Fi><i style=\"height:52%\"><\u002Fi><i style=\"height:40%\"><\u002Fi><i style=\"height:66%\"><\u002Fi><i style=\"height:58%\"><\u002Fi><i style=\"height:82%\"><\u002Fi><i style=\"height:74%\"><\u002Fi><\u002Fdiv>\n        <div class=\"wcard\"><div class=\"stxt\"><b style=\"font-size:10px;color:#2B2115\">오늘의 미션<\u002Fb><br>목·어깨 집중 케어 15분<\u002Fdiv><\u002Fdiv>\n      <\u002Fdiv><\u002Fdiv>\n      <div class=\"phcap\"><div class=\"t\">내 몸 리포트 <span class=\"tag live\">실데이터<\u002Fspan><\u002Fdiv><\u002Fdiv>\n    <\u002Fdiv>\n    <div class=\"phwrap\">\n      <div class=\"ph\"><div class=\"scr\">\n        <div class=\"top\"><span class=\"logo\">건강코인<\u002Fspan><span class=\"coin\">1,240 C<\u002Fspan><\u002Fdiv>\n        <div class=\"htxt\">케어를 마쳤습니다<\u002Fdiv>\n        <div class=\"toast\"><span class=\"c\">+<\u002Fspan>15 코인 적립<\u002Fdiv>\n        <div class=\"wcard\"><div class=\"stxt\"><b style=\"font-size:10px;color:#2B2115\">이번 주 3회째<\u002Fb> — 연속 기록이 쌓이는 중<\u002Fdiv><div class=\"wl g\" style=\"width:60%;margin-top:6px\"><\u002Fdiv><\u002Fdiv>\n      <\u002Fdiv><\u002Fdiv>\n      <div class=\"phcap\"><div class=\"t\">코인 루프 <span class=\"tag live\">실데이터<\u002Fspan><\u002Fdiv><\u002Fdiv>\n    <\u002Fdiv>\n    <div class=\"phwrap\">\n      <div class=\"ph\"><div class=\"scr\">\n        <div class=\"top\"><span class=\"logo\">멤버십<\u002Fspan><\u002Fdiv>\n        <div class=\"ring\"><i><b>65%<\u002Fb>라운지까지<\u002Fi><\u002Fdiv>\n        <div class=\"stxt\" style=\"text-align:center\">프렌드 → <b style=\"color:#7A6335\">라운지<\u002Fb><br>케어 5일이면 다음 문이 열립니다<\u002Fdiv>\n        <div class=\"avrow\" style=\"justify-content:center\"><span class=\"av g\"><\u002Fspan><span class=\"av\"><\u002Fspan><span class=\"av\"><\u002Fspan><span class=\"stxt\" style=\"font-size:8.5px\">가족 합산 중<\u002Fspan><\u002Fdiv>\n      <\u002Fdiv><\u002Fdiv>\n      <div class=\"phcap\"><div class=\"t\">등급 · 가족 <span class=\"tag sample\">샘플<\u002Fspan><\u002Fdiv><\u002Fdiv>\n    <\u002Fdiv>\n    <div class=\"phwrap\">\n      <div class=\"ph\"><div class=\"scr\">\n        <div class=\"top\"><span class=\"logo\">웰니스 셀렉트<\u002Fspan><span class=\"coin\">라운지 전용<\u002Fspan><\u002Fdiv>\n        <div class=\"grid2\"><div class=\"prod\"><\u002Fdiv><div class=\"prod\"><\u002Fdiv><div class=\"prod\"><\u002Fdiv><div class=\"prod\"><\u002Fdiv><\u002Fdiv>\n        <div class=\"lock\" style=\"position:relative;height:26px;background:none;backdrop-filter:none\">라운지 등급부터 열립니다<\u002Fdiv>\n      <\u002Fdiv><\u002Fdiv>\n      <div class=\"phcap\"><div class=\"t\">셀렉트 <span class=\"tag visual\">콘셉트<\u002Fspan><\u002Fdiv><\u002Fdiv>\n    <\u002Fdiv>\n  <\u002Fdiv>\n  <div class=\"footnote\" style=\"text-align:center;margin-top:12px\">화면은 방향을 보여드리기 위한 목업이며, 실데이터/샘플/콘셉트 표기는 2개월 납품 시점의 데이터 상태를 뜻합니다.<br>이 다섯 장면이 하나의 흐름으로 동작하는 것 — 그것이 계약 ①의 결과물입니다.<\u002Fdiv>\n  <div class=\"sfoot\">03 / 13<\u002Fdiv>\n<\u002Fdiv>\n\n<!-- 4 · 2개월의 목표 -->\n<div class=\"slide\">\n  <div class=\"shead\"><span>03 · 2개월의 목표<\u002Fspan><span>바디프랜드 비욘드<\u002Fspan><\u002Fdiv>\n  <div class=\"secno\">03 · 2개월의 목표<\u002Fdiv>\n  <h1 class=\"serif\">9월 출시 고객을 맞을 <span class=\"g\">동작하는 앱<\u002Fspan>을 만듭니다.<\u002Fh1>\n  <p class=\"lead\">전 기능의 일부를 넓게 만드는 것이 아니라 —<br><b>한 고객이 처음부터 끝까지 겪는 완결된 경험 하나<\u002Fb>를 완성합니다. 대작 게임이 본개발 전에 반드시 거치는 검증 방식입니다.<\u002Fp>\n  <div class=\"dlv\">\n    <div class=\"item\">\n      <div class=\"stage\">\n        <div class=\"miniph\"><div class=\"ms\">\n          <div class=\"mlogo\">BODYFRIEND BEYOND<\u002Fdiv>\n          <div class=\"mh\">지난주의 나<\u002Fdiv>\n          <div class=\"mchart\"><i style=\"height:40%\"><\u002Fi><i style=\"height:62%\"><\u002Fi><i style=\"height:48%\"><\u002Fi><i style=\"height:80%\"><\u002Fi><i style=\"height:70%\"><\u002Fi><\u002Fdiv>\n          <div class=\"mtoast\">+15 코인 적립<\u002Fdiv>\n          <div class=\"mh\" style=\"font-size:7.5px;color:#7A6335\">라운지까지 65%<\u002Fdiv>\n        <\u002Fdiv><\u002Fdiv>\n      <\u002Fdiv>\n      <h4><span class=\"num\">1<\u002Fspan>동작하는 앱<\u002Fh4>\n      <p>앞 장의 다섯 장면이 <b>하나의 흐름<\u002Fb>으로 — 기기 연동을 받을 준비가 된 상태로 완성됩니다.<\u002Fp>\n    <\u002Fdiv>\n    <div class=\"item\">\n      <div class=\"stage\">\n        <div class=\"doc\">\n          <div class=\"dtit\">검증 리포트<\u002Fdiv>\n          <div class=\"dchart\"><i style=\"height:55%\"><\u002Fi><i style=\"height:78%\"><\u002Fi><i style=\"height:42%\"><\u002Fi><i style=\"height:90%\"><\u002Fi><i style=\"height:64%\"><\u002Fi><i style=\"height:72%\"><\u002Fi><\u002Fdiv>\n          <div class=\"dnum\">연동 가능 모수 ○○,○○○<\u002Fdiv>\n          <div class=\"dl g\" style=\"width:76%\"><\u002Fdiv>\n          <div class=\"dl\" style=\"width:58%\"><\u002Fdiv>\n        <\u002Fdiv>\n      <\u002Fdiv>\n      <h4><span class=\"num\">2<\u002Fspan>숫자로 확정한 검증<\u002Fh4>\n      <p>팬텀·파라오 실측으로 <b>리포트 성립 범위와 공식 모수 확정<\u002Fb> + 9월 데이터 수집 체계 설계.<\u002Fp>\n    <\u002Fdiv>\n    <div class=\"item\">\n      <div class=\"stage\">\n        <div class=\"dstack\">\n          <div class=\"doc b1\"><div class=\"dtit\">KPI 체계<\u002Fdiv><div class=\"dl\" style=\"width:80%\"><\u002Fdiv><div class=\"dl\" style=\"width:64%\"><\u002Fdiv><div class=\"dl g\" style=\"width:72%\"><\u002Fdiv><\u002Fdiv>\n          <div class=\"doc b2\"><div class=\"dtit\">투입 규모 산출<\u002Fdiv><div class=\"dl\" style=\"width:70%\"><\u002Fdiv><div class=\"dl g\" style=\"width:56%\"><\u002Fdiv><div class=\"dl\" style=\"width:78%\"><\u002Fdiv><\u002Fdiv>\n          <div class=\"doc\"><div class=\"dtit\">혜택 마스터플랜<\u002Fdiv><div class=\"dl g\" style=\"width:82%\"><\u002Fdiv><div class=\"dl\" style=\"width:66%\"><\u002Fdiv><div class=\"dl\" style=\"width:74%\"><\u002Fdiv><div class=\"dl g\" style=\"width:52%\"><\u002Fdiv><div class=\"dl\" style=\"width:70%\"><\u002Fdiv><\u002Fdiv>\n        <\u002Fdiv>\n      <\u002Fdiv>\n      <h4><span class=\"num\">3<\u002Fspan>다음 계약의 판단 재료<\u002Fh4>\n      <p>혜택 마스터플랜(원가 모델) · KPI · 투입 산출 · 역할 분담안 — <b>계약 ②를 판단할 자료 일체<\u002Fb>.<\u002Fp>\n    <\u002Fdiv>\n  <\u002Fdiv>\n  <div class=\"band\">측정하는 것은 규모가 아니라 <span class=\"g\">깊이<\u002Fspan>입니다 — 로그인 전환율 · 기기 연동율 · 리포트 열람 · 케어 리텐션 · 코인 사용률.<\u002Fdiv>\n  <div class=\"sfoot\">04 / 13<\u002Fdiv>\n<\u002Fdiv>\n\n<!-- 5 · 씨앗 3,000 -->\n<div class=\"slide\">\n  <div class=\"shead\"><span>04 · 전략<\u002Fspan><span>바디프랜드 비욘드<\u002Fspan><\u002Fdiv>\n  <div class=\"secno\">04 · 씨앗에서 확산으로<\u002Fdiv>\n  <h1 class=\"serif\">10만으로 가는 길은,<br><span class=\"g\">가장 뜨거운 3,000<\u002Fspan>에서 시작됩니다.<\u002Fh1>\n  <p class=\"lead\">확산에는 순서가 있습니다 —<br>생태계와 혜택을 온전히 쓸 수 있는 고객에서 시작해,<br>검증된 충성도와 활용도를 근거로 전체 고객으로 넓히는 것이 가장 빠르고 확실한 길입니다.<\u002Fp>\n  <div class=\"orbitwrap\">\n    <div class=\"orbit\">\n      <div class=\"oring r3\"><\u002Fdiv>\n      <div class=\"oring r2\"><\u002Fdiv>\n      <div class=\"oring r1\"><span>씨앗<\u002Fspan><b>3,000<\u002Fb><span>가구<\u002Fspan><\u002Fdiv>\n      <div class=\"olab l2\">활성 10만 — 확산 목표<\u002Fdiv>\n      <div class=\"olab l3\">고객 150만 · 가족 500만<\u002Fdiv>\n    <\u002Fdiv>\n    <div class=\"cols\" style=\"grid-template-columns:1fr;gap:12px;align-content:center\">\n      <div class=\"card gold\"><h4>씨앗 — 약 3,000가구<\u002Fh4><p>9월 신규 라인업의 첫 진입 고객. 기기·데이터·혜택이 모두 연결되는 <b>완전한 멤버십 경험의 첫 멤버들<\u002Fb>입니다.<\u002Fp><\u002Fdiv>\n      <div class=\"card\"><h4>실증 — 깊이의 증명<\u002Fh4><p>이 3,000가구의 로그인·연동·리텐션·코인 사용이 <b>\"이 멤버십은 작동한다\"의 증거<\u002Fb>가 됩니다.<\u002Fp><\u002Fdiv>\n      <div class=\"card\"><h4>확산 — 150만 → 활성 10만<\u002Fh4><p>기존 고객 150만을 불러와 활성 10만으로 — <b>확산 여부를 판단할 공식(전환율·리텐션·가구당 비용)이 계약 ①의 결과에서 나옵니다.<\u002Fb><\u002Fp><\u002Fdiv>\n    <\u002Fdiv>\n  <\u002Fdiv>\n  <div class=\"footnote\">씨앗 규모는 출시 계획 공식 확인 시 확정 기입합니다.<\u002Fdiv>\n  <div class=\"sfoot\">05 / 13<\u002Fdiv>\n<\u002Fdiv>\n\n<!-- 8 · 혜택의 값 -->\n<div class=\"slide\">\n  <div class=\"shead\"><span>05 · 혜택의 값<\u002Fspan><span>바디프랜드 비욘드<\u002Fspan><\u002Fdiv>\n  <div class=\"secno\">05 · 혜택의 값 — 이 멤버십은 얼마짜리인가<\u002Fdiv>\n  <h1 class=\"serif\">혜택의 비용은,<br><span class=\"g\">활성 가구당 월 5천~1만 원<\u002Fspan> 수준으로 설계합니다.<\u002Fh1>\n  <p class=\"lead\">\"이 혜택들에 돈이 얼마나 드는가\"에 대한 사전 답변입니다.<br>모든 수치는 국내외 벤치마크 기반의 추정 레인지이며 — 정확한 원가와 예산은 계약 ①에서 실측으로 확정합니다.<\u002Fp>\n  <div class=\"cols c2\" style=\"gap:12px\">\n    <div class=\"card\" style=\"padding:15px 18px\">\n      <h4>혜택 비용의 구조 — 전부 계산에 넣었습니다<\u002Fh4>\n      <ul>\n        <li><b>현금성<\u002Fb> — 건강코인 리워드(케어 활동 적립): 활성 가구당 월 5천~1만 원 상당. 발행분의 20~40%는 통상 미사용이라 실비는 더 낮음<\u002Fli>\n        <li><b>일회성<\u002Fb> — 웰컴 코인(구매가의 1% 미만) · 럭키드로우 경품 · 733 디너 등 이벤트<\u002Fli>\n        <li><b>비현금<\u002Fb> — 셀렉트 노마진 딜(이익을 남기지 않는 것이지 지출이 아님) · 등급 우대 · 가족 계정<\u002Fli>\n      <\u002Ful>\n      <div class=\"price-line\"><span class=\"big\">씨앗 연 2~5억<\u002Fspan><span class=\"ctx\">3,000가구 기준<\u002Fspan><\u002Fdiv>\n      <div class=\"price-line\"><span class=\"big\">확산 연 40~85억<\u002Fspan><span class=\"ctx\">활성 10만 가구 — 매출 대비 약 1~2%, 글로벌 표준 밴드(1~3%) 안<\u002Fspan><\u002Fdiv>\n    <\u002Fdiv>\n    <div class=\"card dark2\" style=\"padding:15px 18px\">\n      <h4>참고 — 함께 놓아 볼 숫자들<\u002Fh4>\n      <ul class=\"facts\">\n        <li>TV홈쇼핑 실질 판매수수료율 <b>27.7%<\u002Fb> (공정거래위원회, 2024년 거래 기준)<\u002Fli>\n        <li>광고·홈쇼핑 지출 <b>연 700~800억<\u002Fb> (7월 16일 발표 자리에서 공유된 규모)<\u002Fli>\n        <li>글로벌 멤버십 리워드 비용 표준 밴드: <b>매출의 1~3%<\u002Fb><\u002Fli>\n      <\u002Ful>\n      <div style=\"margin-top:9px;border-top:1px solid rgba(233,202,128,.25);padding-top:7px\">\n        <p style=\"font-size:11.5px;font-weight:800;color:#CBBBA0;margin-bottom:1px\">멤버십이 자리 잡으면 —<\u002Fp>\n        <ul class=\"facts\">\n          <li>회원은 비회원보다 <b>10~25% 더 씁니다<\u002Fb> (글로벌 평균)<\u002Fli>\n          <li>코스트코: 멤버십 회비가 <b>영업이익의 절반<\u002Fb>, 갱신율 90%<\u002Fli>\n          <li>아마존 프라임: 회원이 비회원의 <b>2.3배<\u002Fb>를 씁니다<\u002Fli>\n        <\u002Ful>\n        <p class=\"footnote\" style=\"margin-top:3px\">출처·세부 근거는 혜택 마스터플랜에 첨부합니다.<\u002Fp>\n      <\u002Fdiv>\n    <\u002Fdiv>\n  <\u002Fdiv>\n  <div class=\"band\">원가 모델과 리워드 예산안은 계약 ①의 정식 납품물입니다 — <span class=\"g\">다음 장은 이 비용이 시작하는 매출<\u002Fspan>입니다.<\u002Fdiv>\n  <div class=\"sfoot\">06 / 13<\u002Fdiv>\n<\u002Fdiv>\n\n<!-- 9 · 이 비용이 시작하는 매출 -->\n<div class=\"slide\">\n  <div class=\"shead\"><span>05 · 혜택의 값<\u002Fspan><span>바디프랜드 비욘드<\u002Fspan><\u002Fdiv>\n  <div class=\"secno\">05 · 혜택의 값 — 이 비용이 시작하는 매출<\u002Fdiv>\n  <h1 class=\"serif\">이 혜택 위에서,<br><span class=\"g\">세 개의 매출<\u002Fspan>이 시작됩니다.<\u002Fh1>\n  <p class=\"lead\" style=\"margin-bottom:10px\">이미 곁에 있는 고객 150만의 <b>다음 매출을 여는 장치<\u002Fb> —<br>이 멤버십의 리워드는 그 장치의 가동 비용입니다.<br>리워드가 돌리는 바퀴에서 세 갈래의 매출이 나옵니다.<\u002Fp>\n  <div style=\"display:flex;gap:30px;align-items:center;flex:1;min-height:0\">\n    <div class=\"fly\">\n      <div class=\"fring\"><\u002Fdiv>\n      <div class=\"fn gold\" style=\"top:12px;left:50%;transform:translateX(-50%)\">리워드 · 혜택<\u002Fdiv>\n      <div class=\"fn\" style=\"top:50%;right:-6px;transform:translateY(-50%)\">매일 열리는 앱<\u002Fdiv>\n      <div class=\"fn\" style=\"bottom:12px;left:50%;transform:translateX(-50%)\">케어 · 데이터 · 등급<\u002Fdiv>\n      <div class=\"fn\" style=\"top:50%;left:-6px;transform:translateY(-50%)\">매출 → 재원<\u002Fdiv>\n      <div class=\"fa\" style=\"top:46px;right:46px;transform:rotate(45deg)\">▸<\u002Fdiv>\n      <div class=\"fa\" style=\"bottom:46px;right:46px;transform:rotate(135deg)\">▸<\u002Fdiv>\n      <div class=\"fa\" style=\"bottom:46px;left:46px;transform:rotate(225deg)\">▸<\u002Fdiv>\n      <div class=\"fa\" style=\"top:46px;left:46px;transform:rotate(315deg)\">▸<\u002Fdiv>\n      <div class=\"fc\">리워드<br>선순환<\u002Fdiv>\n    <\u002Fdiv>\n    <div class=\"cols\" style=\"grid-template-columns:1fr;gap:9px;align-content:center;font-size:12.8px\">\n      <div class=\"card gold\" style=\"padding:12px 16px\"><h4><span class=\"num\">1<\u002Fspan>구독 — 전환보다 유지가 승부입니다<\u002Fh4><p style=\"font-size:12.7px;line-height:1.55\">연말로 준비 중인 AI 기능 구독이 시작되면, <b>파는 것보다 지키는 것이 어려운 사업<\u002Fb>이 함께 시작됩니다. 넷플릭스가 보여줬듯 구독을 지키는 것은 <b>매일 열어 볼 이유<\u002Fb>입니다 — 리포트·코인·혜택이 그 이유를 만들고, 유지율이 곧 매출이 됩니다.<\u002Fp><\u002Fdiv>\n      <div class=\"card gold\" style=\"padding:12px 16px\"><h4><span class=\"num\">2<\u002Fspan>재구매 · 업셀<\u002Fh4><p style=\"font-size:12.7px;line-height:1.55\">새 AI 기능은 신규 라인업에서 시작되므로 <b>기존 기기 고객이 가장 가까운 업그레이드 수요층<\u002Fb>입니다. 등급과 코인이 그 교체 수요와 가족의 첫 구매를 회사 안으로 되돌립니다.<\u002Fp><\u002Fdiv>\n      <div class=\"card gold\" style=\"padding:12px 16px\"><h4><span class=\"num\">3<\u002Fspan>직거래 매출<\u002Fh4><p style=\"font-size:12.7px;line-height:1.55\">셀렉트는 검증된 회원에게만 여는 자기 채널 — <b>판매수수료 없는 회원 전용 매출<\u002Fb>이 기존 직판 채널 위에 더해집니다.<\u002Fp><\u002Fdiv>\n    <\u002Fdiv>\n  <\u002Fdiv>\n  <div class=\"band\">여기에 733 소사이어티 — <span class=\"g\">VIP를 대접하는 회사<\u002Fspan>라는 브랜드 자산까지. 리워드는 판매의 끝이 아니라 <span class=\"g\">다음 매출의 시작점<\u002Fspan>에 서 있습니다.<\u002Fdiv>\n  <div class=\"sfoot\">07 / 13<\u002Fdiv>\n<\u002Fdiv>\n\n<!-- 6 · 어떻게 2개월이 가능한가 -->\n<div class=\"slide\">\n  <div class=\"shead\"><span>06 · 수행 방식<\u002Fspan><span>바디프랜드 비욘드<\u002Fspan><\u002Fdiv>\n  <div class=\"secno\">06 · 수행 방식 — 두 달이 가능한 이유<\u002Fdiv>\n  <h1 class=\"serif\">두 달이 가능한 이유 —<br><span class=\"g\">100% AI 네이티브 개발<\u002Fspan>입니다.<\u002Fh1>\n  <p class=\"lead\">개발 속도의 문제이자 — 이후 수년간의 운영·유지보수 비용 구조의 문제입니다.<br>세 트랙이 순차가 아니라 겹쳐 달리기에, 8주가 성립합니다.<\u002Fp>\n  <div class=\"gantt\">\n    <div class=\"ghead\">\n      <div><\u002Fdiv>\n      <div class=\"wkhead\"><span>1주<\u002Fspan><span>2주<\u002Fspan><span>3주<\u002Fspan><span>4주<\u002Fspan><span>5주<\u002Fspan><span>6주<\u002Fspan><span>7주<\u002Fspan><span>8주<\u002Fspan><\u002Fdiv>\n    <\u002Fdiv>\n    <div class=\"grow\">\n      <div class=\"glabel\">A · 검증<\u002Fdiv>\n      <div class=\"glane\">\n        <div class=\"cell\"><\u002Fdiv><div class=\"cell\"><\u002Fdiv><div class=\"cell\"><\u002Fdiv><div class=\"cell\"><\u002Fdiv><div class=\"cell\"><\u002Fdiv><div class=\"cell\"><\u002Fdiv><div class=\"cell\"><\u002Fdiv><div class=\"cell\"><\u002Fdiv>\n        <div class=\"bar a\" style=\"grid-column:1/span 4\">데이터 실측 · 모수 확정 · 수집 설계<\u002Fdiv>\n      <\u002Fdiv>\n    <\u002Fdiv>\n    <div class=\"grow\">\n      <div class=\"glabel\">B · 구현<\u002Fdiv>\n      <div class=\"glane\">\n        <div class=\"cell\"><\u002Fdiv><div class=\"cell\"><\u002Fdiv><div class=\"cell\"><\u002Fdiv><div class=\"cell\"><\u002Fdiv><div class=\"cell\"><\u002Fdiv><div class=\"cell\"><\u002Fdiv><div class=\"cell\"><\u002Fdiv><div class=\"cell\"><\u002Fdiv>\n        <div class=\"bar b\" style=\"grid-column:3/span 6\">리포트 · 코인 루프 · 등급 · 온보딩<\u002Fdiv>\n      <\u002Fdiv>\n    <\u002Fdiv>\n    <div class=\"grow\">\n      <div class=\"glabel\">C · 설계<\u002Fdiv>\n      <div class=\"glane\">\n        <div class=\"cell\"><\u002Fdiv><div class=\"cell\"><\u002Fdiv><div class=\"cell\"><\u002Fdiv><div class=\"cell\"><\u002Fdiv><div class=\"cell\"><\u002Fdiv><div class=\"cell\"><\u002Fdiv><div class=\"cell\"><\u002Fdiv><div class=\"cell\"><\u002Fdiv>\n        <div class=\"bar c\" style=\"grid-column:5/span 4\">혜택 원가 · KPI · 투입 · 역할 분담안<\u002Fdiv>\n      <\u002Fdiv>\n    <\u002Fdiv>\n  <\u002Fdiv>\n  <div class=\"cols c3\" style=\"margin-top:8px;flex:0 0 auto\">\n    <div class=\"card\"><h4>속도<\u002Fh4><p>소수 정예 × AI 개발 — 계절·캠페인 콘텐츠를 개발자 손을 거의 거치지 않고 갱신하는 구조까지 함께 만들어집니다.<\u002Fp><\u002Fdiv>\n    <div class=\"card\"><h4>단일 코드베이스<\u002Fh4><p>AI 개발·유지보수 효율은 <b>하나의 일관된 코드베이스<\u002Fb>에서 극대화됩니다 — 검증 단계를 단일 코드베이스로 시작하는 이유입니다.<\u002Fp><\u002Fdiv>\n    <div class=\"card\"><h4>해 본 손<\u002Fh4><p>리체 개발진은 <b>누적 1,200만 명이 즐긴 라이브 서비스<\u002Fb>를 설계·운영했습니다. 이 규모의 리텐션 설계를 만들어 본 경험이 8주의 근거입니다.<\u002Fp><\u002Fdiv>\n  <\u002Fdiv>\n  <div class=\"sfoot\">08 / 13<\u002Fdiv>\n<\u002Fdiv>\n\n<!-- 7 · 왜 리체 단독인가 -->\n<div class=\"slide\">\n  <div class=\"shead\"><span>06 · 수행 방식<\u002Fspan><span>바디프랜드 비욘드<\u002Fspan><\u002Fdiv>\n  <div class=\"secno\">06 · 수행 방식 — 두 달의 역할<\u002Fdiv>\n  <h1 class=\"serif\">바디프랜드는 <span class=\"g\">출시에 집중<\u002Fspan>하십시오.<br>두 달 뒤, 결과만 판정하시면 됩니다.<\u002Fh1>\n  <p class=\"lead\">9월 출시를 앞둔 시기입니다 —<br>검증 2개월은 리체가 전담하고, 바디프랜드는 별도 개발 인력 투입 없이 결과를 받아 보시면 됩니다.<\u002Fp>\n  <div class=\"rel\">\n    <div class=\"rbox\">리체<span>2개월 전담 실행<\u002Fspan><\u002Fdiv>\n    <div class=\"rarr\">→<\u002Fdiv>\n    <div class=\"rbox\" style=\"background:#FFFDF6\">동작하는 앱 + 검증 데이터 + 마스터플랜<span>납품물 일체<\u002Fspan><\u002Fdiv>\n    <div class=\"rarr\">→<\u002Fdiv>\n    <div class=\"rbox\">바디프랜드<span>검수 · 판정 · 다음 결정<\u002Fspan><\u002Fdiv>\n  <\u002Fdiv>\n  <div class=\"cols c3\">\n    <div class=\"card gold\"><h4>원안 그대로 검증<\u002Fh4><p>이번 두 달의 산출물은 <b>\"발표된 구상이 실제로 작동하는가\"에 대한 답<\u002Fb>이어야 합니다. 리체는 구상 원안을 그대로 구현하고, 그 원안으로 판정받겠습니다.<\u002Fp><\u002Fdiv>\n    <div class=\"card gold\"><h4>책임의 단일화<\u002Fh4><p>리체가 전담하므로 결과가 부족하면 <b>원인이 명확합니다<\u002Fb> — 판정이 쉬운 구조가 다음 결정을 빠르게 만듭니다.<\u002Fp><\u002Fdiv>\n    <div class=\"card gold\"><h4>겹치는 부분은 두 달 뒤, 결과 위에서 정리합니다<\u002Fh4><p>새 멤버십 앱은 기존 앱·기기 기능과 자연히 맞닿습니다. 어디를 합치고 어디를 나눌지를 지금 추측으로 정하지 않는 것 — 그것이 이 두 달의 설계입니다. 동작하는 결과를 보신 뒤, <b>리체 단독이든 하이브리드든 바디프랜드가 정하시면 됩니다.<\u002Fb><\u002Fp><\u002Fdiv>\n  <\u002Fdiv>\n  <div class=\"band\">실행은 리체가, 결정은 바디프랜드가 맡는 두 달입니다 — <span class=\"g\">판단 재료(역할 분담안)는 리체가 만들어 제출<\u002Fspan>합니다.<\u002Fdiv>\n  <div class=\"sfoot\">09 / 13<\u002Fdiv>\n<\u002Fdiv>\n\n<!-- 11 · 8주 일정 -->\n<div class=\"slide\">\n  <div class=\"shead\"><span>07 · 일정과 진행<\u002Fspan><span>바디프랜드 비욘드<\u002Fspan><\u002Fdiv>\n  <div class=\"secno\">07 · 8주 일정 · 보고 체계<\u002Fdiv>\n  <h1 class=\"serif\">6주차에 동작 버전이 나오고,<br>8주차에 <span class=\"g\">9월 첫 로그인을 받을 준비<\u002Fspan>가 끝납니다.<\u002Fh1>\n  <div class=\"wkline\">\n    <div class=\"wkbox\">1주<\u002Fdiv>\n    <div class=\"wkbox rep\">2주<span class=\"rp\">서면 보고<\u002Fspan><\u002Fdiv>\n    <div class=\"wkbox\">3주<\u002Fdiv>\n    <div class=\"wkbox rep\">4주<span class=\"chip\">검증 리포트 · 목표치 합의<\u002Fspan><span class=\"rp\">서면 보고<\u002Fspan><\u002Fdiv>\n    <div class=\"wkbox\">5주<\u002Fdiv>\n    <div class=\"wkbox hot rep\">6주<span class=\"chip hot\">슬라이스 α — 출시 전 도달<\u002Fspan><span class=\"rp\">서면 보고<\u002Fspan><\u002Fdiv>\n    <div class=\"wkbox\">7주<\u002Fdiv>\n    <div class=\"wkbox rep\">8주<span class=\"chip\">최종 납품 · 출시 대응<\u002Fspan><span class=\"rp\">서면 보고<\u002Fspan><\u002Fdiv>\n  <\u002Fdiv>\n  <div class=\"cols c3\" style=\"margin-top:20px\">\n    <div class=\"card\"><h4>착수 시점이 여유를 정합니다<\u002Fh4><p>7월 안에 착수하면 <b>동작 버전(α)이 9월 출시 전에 도달<\u002Fb>합니다. 착수가 늦어질수록 α와 출시 사이의 여유가 줄어듭니다.<\u002Fp><\u002Fdiv>\n    <div class=\"card\"><h4>전자계약 · 2주 단위 서면 보고<\u002Fh4><p>계약은 전자계약으로 진행하고, 진행 상황을 2주 단위 서면 보고로 공유합니다 — 대면 없이도 진행이 멈추지 않는 체계입니다.<\u002Fp><\u002Fdiv>\n    <div class=\"card\"><h4>목표치는 4주차에 함께 확정<\u002Fh4><p>KPI 목표치는 <b>4주차 검증 리포트에서 실측 근거와 함께 양사 합의로 확정<\u002Fb>합니다 — 책임질 수 있는 숫자만 약속합니다.<\u002Fp><\u002Fdiv>\n  <\u002Fdiv>\n  <div class=\"band\">필요한 협조는 <span class=\"g\">고객 동의·보안 절차 안에서의 데이터 접근<\u002Fspan>, 그리고 주 1회 창구 협의 — 이 두 가지면 충분합니다.<\u002Fdiv>\n  <div class=\"sfoot\">10 / 13<\u002Fdiv>\n<\u002Fdiv>\n\n<!-- 10 · 지금 여는 것 / 검증이 여는 것 -->\n<div class=\"slide\">\n  <div class=\"shead\"><span>08 · 다음 단계<\u002Fspan><span>바디프랜드 비욘드<\u002Fspan><\u002Fdiv>\n  <div class=\"secno\">08 · 지금 여는 것, 검증이 여는 것<\u002Fdiv>\n  <h1 class=\"serif\">계약 ①은 <span class=\"g\">첫 번째 문<\u002Fspan>입니다 —<br>나머지 문은 검증이 엽니다.<\u002Fh1>\n  <p class=\"lead\">아래 오른쪽은 하지 않는 일이 아니라 — <b>이번 검증을 통과하면 하게 될 일<\u002Fb>입니다.<br>순서를 지키는 것이 전체를 가장 빨리 가는 길입니다.<\u002Fp>\n  <div class=\"cols c2\">\n    <div class=\"card gold\"><div class=\"door open\"><\u002Fdiv><h4>지금 — 계약 ①이 여는 것 (2개월)<\u002Fh4>\n      <ul>\n        <li>9월 출시 고객을 맞는 <b>동작하는 멤버십 앱<\u002Fb> (첫 로그인 ~ 등급까지)<\u002Fli>\n        <li>씨앗 3,000가구 파일럿 설계와 <b>데이터 실측 · 수집 체계<\u002Fb><\u002Fli>\n        <li>혜택 마스터플랜 · 원가 모델 · KPI · 투입 산출 · 역할 분담안<\u002Fli>\n      <\u002Ful>\n    <\u002Fdiv>\n    <div class=\"card\"><div class=\"door closed\"><\u002Fdiv><h4>검증 통과 후 — 다음 계약이 여는 것<\u002Fh4>\n      <ul>\n        <li><b>확산<\u002Fb> — 기존 고객 150만을 불러오는 유입 설계, 활성 10만으로<\u002Fli>\n        <li><b>코인 경제 2·3단계<\u002Fb> — 크레딧·시장 개방 (별도 승인)<\u002Fli>\n        <li><b>소사이어티 거래 보증<\u002Fb> — 인증·보증·평판 구조 (별도 승인)<\u002Fli>\n        <li><b>개발 방식의 확정<\u002Fb> — 검증 데이터가 답한 대로<\u002Fli>\n      <\u002Ful>\n    <\u002Fdiv>\n  <\u002Fdiv>\n  <div class=\"band\">오른쪽 문들은 닫힌 것이 아니라 <span class=\"g\">검증이 여는 문<\u002Fspan>입니다 — 그래서 두 달짜리 가벼운 첫 결정이 성립합니다.<\u002Fdiv>\n  <div class=\"sfoot\">11 / 13<\u002Fdiv>\n<\u002Fdiv>\n\n<!-- 12 · 요청드리는 결정 -->\n<div class=\"slide\">\n  <div class=\"shead\"><span>09 · 요청드리는 결정<\u002Fspan><span>바디프랜드 비욘드<\u002Fspan><\u002Fdiv>\n  <div class=\"secno\">09 · 요청드리는 결정<\u002Fdiv>\n  <h1 class=\"serif\">필요한 결정은 하나 —<br><span class=\"g\">계약 ① 승인<\u002Fspan>입니다.<\u002Fh1>\n  <div class=\"cols c2\" style=\"margin-top:8px\">\n    <div class=\"card gold\"><h4>계약 ① 승인 — 1.99억 원 · 2개월<\u002Fh4>\n    <ul>\n      <li><b>산출<\u002Fb> — 인건비와 AI 중심입니다<\u002Fli>\n      <li><b>지급<\u002Fb> — 체결 시 전액 지급입니다<\u002Fli>\n      <li><b>용도<\u002Fb> — 전액이 두 달의 실행 비용입니다<\u002Fli>\n    <\u002Ful><\u002Fdiv>\n    <div class=\"card gold\"><h4>계약 안에 함께 담는 약속<\u002Fh4>\n    <ul>\n      <li><b>전용성<\u002Fb> — 결과물과 노하우는 바디프랜드 외 어디에도 제공하지 않습니다<\u002Fli>\n      <li><b>고객 정보 보호<\u002Fb> — 데이터는 고객 동의와 법령의 범위 안에서만 다룹니다<\u002Fli>\n      <li><b>원스톱<\u002Fb> — 비밀유지 약정까지 포함, 별도 계약 없이 <b>계약 ① 하나로 시작<\u002Fb>합니다<\u002Fli>\n    <\u002Ful><\u002Fdiv>\n  <\u002Fdiv>\n  <table style=\"margin-top:14px\">\n    <tbody><tr><th style=\"width:24%\">오늘 승인 범위<\u002Fth><td>계약 ① 하나 — 계약 ②·③, 코인 뒷단, 소사이어티 보증은 검증 결과 위에서 별도 승인<\u002Ftd><\u002Ftr>\n    <tr><th>7월 승인 시<\u002Fth><td>동작 버전(α)이 9월 출시 전 도달 — 첫 로그인 고객을 준비된 화면으로 맞이<\u002Ftd><\u002Ftr>\n  <\u002Ftbody><\u002Ftable>\n  <div class=\"sfoot\">12 / 13<\u002Fdiv>\n<\u002Fdiv>\n\n<!-- 13 · CLOSING -->\n<div class=\"slide dark\">\n  <div class=\"shead\"><span>Closing<\u002Fspan><span>LICHE · 2026.07<\u002Fspan><\u002Fdiv>\n  <div class=\"center\">\n    <div class=\"hr-gold\"><\u002Fdiv>\n    <div class=\"cover-quote\">\n      9월, 새 라인업의 첫 고객이 계정을 만듭니다.<br>\n      그 화면 뒤에 멤버십이 준비되어 있도록,<br>\n      리체는 <b style=\"color:var(--gold-bright)\">2026년 7월 착수<\u002Fb>를 제안드립니다.<br><br>\n      계약 ①을 승인해 주시면 바로 시작하겠습니다.<br>\n      연내 베타는 그 위에서 가능해집니다.\n    <\u002Fdiv>\n    <div class=\"hr-gold\"><\u002Fdiv>\n    <div class=\"tagline\">LICHE · 바디프랜드 멤버십 메타버스 · 바디프랜드 전용 프로젝트 · 대외비<\u002Fdiv>\n  <\u002Fdiv>\n  <div class=\"sfoot\">13 / 13<\u002Fdiv>\n<\u002Fdiv>\n\n\n\n<\u002Fbody><\u002Fhtml>"
+  </script>
+</body>
+</html>
